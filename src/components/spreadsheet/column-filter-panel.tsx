@@ -13,11 +13,15 @@ import {
 
 const DEBOUNCE_MS = 180;
 
+interface ColumnFilterPanelProps {
+  column: Column<Record<string, CellValue>, unknown>;
+  className?: string;
+}
+
 export function ColumnFilterPanel({
   column,
-}: {
-  column: Column<Record<string, CellValue>, unknown>;
-}) {
+  className,
+}: ColumnFilterPanelProps) {
   const rawFilterValue = column.getFilterValue();
   const filterValue = useMemo(
     () => normalizeColumnFilterValue(rawFilterValue),
@@ -42,7 +46,7 @@ export function ColumnFilterPanel({
 
   return (
     <div
-      className="space-y-3 rounded-md border border-border/70 bg-muted/20 p-3"
+      className={`space-y-3 rounded-md border border-border/70 bg-muted/20 p-3 ${className ?? ""}`}
       onClick={(event) => event.stopPropagation()}
       onKeyDown={(event) => event.stopPropagation()}
     >

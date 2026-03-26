@@ -1,0 +1,25 @@
+---
+title: ColumnFilterPanel
+description: Per-column filter panel component.
+---
+
+# ColumnFilterPanel
+
+Filter panel for individual columns with search and expression modes.
+
+## Props
+
+```tsx
+interface ColumnFilterPanelProps {
+  column: Column<Record<string, CellValue>, unknown>;
+  className?: string;
+}
+```
+
+## Usage
+
+```tsx
+import { ColumnFilterPanel } from "@shadsheet/ui";
+
+<ColumnFilterPanel column={column} />
+```

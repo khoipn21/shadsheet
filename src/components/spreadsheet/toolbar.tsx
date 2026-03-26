@@ -31,6 +31,7 @@ interface ToolbarProps {
   columns: SpreadsheetColumnConfig[];
   exportFileName?: string;
   onExport?: (format: SpreadsheetExportFormat) => void;
+  className?: string;
 }
 
 function getExportFileName(baseName: string | undefined, format: SpreadsheetExportFormat) {
@@ -67,7 +68,7 @@ function useSelectedCellKeys(): string[] {
   return [];
 }
 
-export function Toolbar({ columns, exportFileName, onExport }: ToolbarProps) {
+export function Toolbar({ columns, exportFileName, onExport, className }: ToolbarProps) {
   const table = useContext(TableContext);
   const tableMeta = table?.options.meta as SpreadsheetTableMeta | undefined;
   const hf = useHyperFormula();
@@ -253,7 +254,7 @@ export function Toolbar({ columns, exportFileName, onExport }: ToolbarProps) {
   const separator = <div className="w-px h-5 bg-border mx-1" />;
 
   return (
-    <div className="flex items-center gap-0.5 border border-border rounded-md bg-background px-2 h-9 text-sm">
+    <div className={`flex items-center gap-0.5 border border-border rounded-md bg-background px-2 h-9 text-sm ${className ?? ""}`}>
       {/* Undo / Redo */}
       {toolbarBtn("Undo", <Undo2 className="w-4 h-4" />, handleUndo, false, !hf?.isThereSomethingToUndo())}
       {toolbarBtn("Redo", <Redo2 className="w-4 h-4" />, handleRedo, false, !hf?.isThereSomethingToRedo())}

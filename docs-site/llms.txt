@@ -1,0 +1,50 @@
+---
+title: llms.txt
+description: Machine-readable documentation for LLMs.
+---
+
+# ShadSheet
+
+> Headless React spreadsheet component library built with TanStack Table, HyperFormula, and shadcn conventions.
+
+## Getting Started
+
+- [Installation](/installation): Install and configure ShadSheet
+- [Quick Start](/quick-start): Minimal working example
+- [Concepts](/concepts): Architecture and data flow
+
+## Components
+
+- [Spreadsheet](/components/spreadsheet): Batteries-included spreadsheet component
+- [SpreadsheetGrid](/components/spreadsheet-grid): Virtualized grid renderer
+- [Toolbar](/components/toolbar): Formatting toolbar
+- [FormulaBar](/components/formula-bar): Formula input bar
+- [StatusBar](/components/status-bar): Row count and aggregates
+- [ColumnHeaders](/components/column-headers): Header row with sorting/filtering
+
+## Hooks
+
+- [useSpreadsheetStore](/hooks/use-spreadsheet-store): Access Zustand store for spreadsheet state
+- [useCellSelection](/hooks/use-cell-selection): Cell/range selection logic
+- [useClipboard](/hooks/use-clipboard): Copy/cut/paste operations
+- [useKeyboardNavigation](/hooks/use-keyboard-navigation): Arrow keys, Tab, Enter navigation
+- [useHyperFormula](/hooks/use-hyperformula): Access formula engine instance
+- [useMergeCells](/hooks/use-merge-cells): Cell merging operations
+
+## Utilities
+
+- [exportToCSV / exportToXLSX](/utils/export-utils): Data export functions
+- [spreadsheetColumnFilterFn](/utils/filter-utils): Column filter logic
+- [validateCellValue](/utils/validation-utils): Zod-based cell validation
+- [parseCellAddress / formatCellAddress](/utils/cell-address): A1 notation utilities
+
+## Guides
+
+- [Headless Usage](/guides/headless-usage): Build custom UI with hooks + provider
+- [Theming](/guides/theming): Tailwind CSS variables and dark mode
+- [TypeScript](/guides/typescript): Type definitions and generics
+
+## Optional
+
+- [Advanced Customization](/guides/custom-layouts)
+- [API Reference](/api-reference)

@@ -1,0 +1,41 @@
+---
+title: SpreadsheetGrid
+description: Virtualized grid component for custom layouts.
+---
+
+# SpreadsheetGrid
+
+The virtualized grid renderer. Use this when building custom layouts.
+
+## Props
+
+```tsx
+interface SpreadsheetGridProps {
+  className?: string;
+  conditionalFormats?: ConditionalFormatRule[];
+  apiRef?: React.MutableRefObject<SpreadsheetGridApi | null>;
+}
+```
+
+## Usage
+
+```tsx
+import { SpreadsheetGrid } from "@shadsheet/ui";
+
+<SpreadsheetGrid className="flex-1" />
+```
+
+## API Ref
+
+```tsx
+const apiRef = useRef<SpreadsheetGridApi>(null);
+
+// Focus the grid
+apiRef.current?.focus();
+
+// Scroll to cell
+apiRef.current?.scrollToCell(50, "name");
+
+// Get visible columns
+apiRef.current?.getVisibleColumnIds();
+```

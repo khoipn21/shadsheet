@@ -1,0 +1,105 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "ShadSheet",
+  "logo": {
+    "dark": "/logo/dark.svg",
+    "light": "/logo/light.svg"
+  },
+  "favicon": "/favicon.svg",
+  "colors": {
+    "primary": "#0D9488",
+    "light": "#14B8A6",
+    "dark": "#0F766E"
+  },
+  "topbarLinks": [
+    {
+      "name": "GitHub",
+      "url": "https://github.com/shadsheet/ui"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "npm",
+    "url": "https://www.npmjs.com/package/@shadsheet/ui"
+  },
+  "tabs": [
+    {
+      "name": "Components",
+      "url": "components"
+    },
+    {
+      "name": "Hooks",
+      "url": "hooks"
+    },
+    {
+      "name": "Utilities",
+      "url": "utils"
+    },
+    {
+      "name": "Guides",
+      "url": "guides"
+    }
+  ],
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/shadsheet/ui"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Getting Started",
+      "pages": ["introduction", "installation", "quick-start", "concepts"]
+    },
+    {
+      "group": "Components",
+      "pages": [
+        "components/spreadsheet",
+        "components/spreadsheet-grid",
+        "components/toolbar",
+        "components/formula-bar",
+        "components/status-bar",
+        "components/column-headers",
+        "components/global-search-filter",
+        "components/column-filter-panel",
+        "components/context-menu"
+      ]
+    },
+    {
+      "group": "Hooks",
+      "pages": [
+        "hooks/use-spreadsheet-store",
+        "hooks/use-cell-selection",
+        "hooks/use-clipboard",
+        "hooks/use-keyboard-navigation",
+        "hooks/use-hyperformula",
+        "hooks/use-merge-cells",
+        "hooks/use-column-resize",
+        "hooks/use-grid-operations",
+        "hooks/use-auto-fill"
+      ]
+    },
+    {
+      "group": "Utilities",
+      "pages": [
+        "utils/export-utils",
+        "utils/filter-utils",
+        "utils/validation-utils",
+        "utils/cell-address",
+        "utils/create-spreadsheet-store"
+      ]
+    },
+    {
+      "group": "Guides",
+      "pages": [
+        "guides/headless-usage",
+        "guides/custom-layouts",
+        "guides/theming",
+        "guides/typescript"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/shadsheet/ui"
+  }
+}

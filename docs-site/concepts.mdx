@@ -1,0 +1,181 @@
+---
+title: Concepts
+description: Core concepts and architecture of ShadSheet.
+---
+
+# Concepts
+
+## Provider Pattern
+
+ShadSheet uses React contexts to share state across components. The `SpreadsheetProvider` wraps your spreadsheet UI and provides:
+
+- **SpreadsheetContext** - Zustand store for UI state
+- **TableContext** - TanStack Table instance
+- **HyperFormulaContext** - Formula engine instance
+
+```tsx
+import {
+  SpreadsheetProvider,
+  SpreadsheetGrid,
+  Toolbar,
+  FormulaBar,
+} from "@shadsheet/ui";
+
+function CustomSpreadsheet({ data, columns }) {
+  return (
+    <SpreadsheetProvider data={data} columns={columns}>
+      <div className="flex flex-col h-full">
+        <Toolbar columns={columns} />
+        <FormulaBar />
+        <SpreadsheetGrid className="flex-1" />
+      </div>
+    </SpreadsheetProvider>
+  );
+}
+```
+
+<Warning>
+Hooks like `useSpreadsheetStore` and `useHyperFormula` must be used within a `SpreadsheetProvider`.
+</Warning>
+
+## State Management
+
+ShadSheet uses Zustand with Immer for state management. The store holds:
+
+- **Selection state** - Active cell, selection range
+- **Edit state** - Currently editing cell, value, validation errors
+- **Table state** - Sorting, filters, column order, pinning
+- **UI state** - Cell formats, merged cells, context menu
+
+```tsx
+import { useSpreadsheetStore } from "@shadsheet/ui";
+
+function SelectionIndicator() {
+  const activeCell = useSpreadsheetStore((s) => s.activeCell);
+  const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
+
+  if (!activeCell) return <span>No selection</span>;
+
+  return (
+    <span>
+      {selectionRange
+        ? `Range: ${selectionRange.start.rowIndex}:${selectionRange.end.rowIndex}`
+        : `Cell: ${activeCell.rowIndex}, ${activeCell.columnId}`}
+    </span>
+  );
+}
+```
+
+## Data Flow
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
+│   Props     │────▶│ SpreadsheetProvider │────▶│ TanStack Table │
+│ data, cols  │     │   + HyperFormula  │     │   + Zustand   │
+└─────────────┘     └──────────────────┘     └─────────────┘
+                                                   │
+                    ┌──────────────────────────────┘
+                    ▼
+              ┌─────────────┐
+              │ Components  │
+              │ Grid, Toolbar│
+              └─────────────┘
+                    │
+                    ▼
+              ┌─────────────┐
+              │   Callbacks │
+              │ onCellChange│
+              └─────────────┘
+```
+
+### HyperFormula Integration
+
+Cell values are stored in HyperFormula, not React state. This enables:
+
+- Excel-compatible formulas
+- Undo/redo history
+- Dependency tracking
+- Cross-sheet references (future)
+
+```tsx
+import { useHyperFormula } from "@shadsheet/ui";
+
+function FormulaViewer() {
+  const hf = useHyperFormula();
+
+  if (!hf) return null;
+
+  // Access raw formula
+  const formula = hf.getCellFormula({ sheet: 0, row: 0, col: 0 });
+
+  // Access computed value
+  const value = hf.getCellValue({ sheet: 0, row: 0, col: 0 });
+
+  return <div>{formula ?? String(value)}</div>;
+}
+```
+
+## Column Configuration
+
+Columns define the schema and behavior:
+
+```tsx
+interface ColumnConfig<TData> {
+  id: string;                    // Column identifier (maps to data key)
+  header: string;                // Display name
+  width?: number;                // Initial width in pixels
+  minWidth?: number;             // Minimum resizable width
+  maxWidth?: number;             // Maximum resizable width
+  pinned?: "left" | "right";     // Pin to edge
+  sortable?: boolean;            // Enable sorting
+  filterable?: boolean;          // Enable filtering
+  type?: "text" | "number" | "date" | "select" | "checkbox";
+  editable?: boolean | ((row: TData) => boolean);  // Edit permission
+  validation?: ZodSchema;        // Zod validation schema
+  options?: SelectOption[];      // Options for select type
+}
+```
+
+## Selection Model
+
+ShadSheet supports multiple selection modes:
+
+### Cell Selection
+
+```tsx
+const activeCell = useSpreadsheetStore((s) => s.activeCell);
+// { rowIndex: 0, columnId: "name" }
+```
+
+### Range Selection
+
+```tsx
+const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
+// { start: { rowIndex: 0, columnId: "a" }, end: { rowIndex: 5, columnId: "c" } }
+```
+
+### Row Selection
+
+```tsx
+<Spreadsheet
+  data={data}
+  columns={columns}
+  rowSelection="multi"  // "single" | "multi" | "none"
+  onSelectionChange={(selection) => {
+    console.log(selection.selectedRowIds);  // ["row-1", "row-3"]
+    console.log(selection.selectedRows);    // [{...}, {...}]
+  }}
+/>
+```
+
+## Virtualization
+
+ShadSheet uses TanStack Virtual for both rows and columns:
+
+- **Rows** - Virtualized scrolling for 100K+ rows
+- **Center columns** - Virtualized horizontal scrolling
+- **Pinned columns** - Not virtualized (always visible)
+
+<Note>
+Virtualization is automatic. No configuration needed.
+</Note>

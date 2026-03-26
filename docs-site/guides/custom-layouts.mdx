@@ -1,0 +1,28 @@
+---
+title: Custom Layouts
+description: Compose sub-components in custom arrangements.
+---
+
+# Custom Layouts
+
+Build custom spreadsheet layouts using sub-components.
+
+## Horizontal Split
+
+```tsx
+<SpreadsheetProvider data={data} columns={columns}>
+  <div className="grid grid-cols-2 h-full">
+    <SpreadsheetGrid />
+    <SpreadsheetGrid />
+  </div>
+</SpreadsheetProvider>
+```
+
+## Minimal Editor
+
+```tsx
+<SpreadsheetProvider data={data} columns={columns}>
+  <FormulaBar />
+  <SpreadsheetGrid />
+</SpreadsheetProvider>
+```

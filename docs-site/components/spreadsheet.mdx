@@ -1,0 +1,164 @@
+---
+title: Spreadsheet
+description: The main batteries-included spreadsheet component.
+---
+
+# Spreadsheet
+
+The `Spreadsheet` component is the primary entry point. It includes all features: toolbar, formula bar, grid, status bar, and context menu.
+
+## Props
+
+```tsx
+import { Spreadsheet, type SpreadsheetProps } from "@shadsheet/ui";
+```
+
+### Data Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `data` | `TData[]` | ✓ | Array of row objects |
+| `columns` | `ColumnConfig<TData>[]` | ✓ | Column definitions |
+| `getRowId` | `(row, index) => string` | | Custom row ID getter |
+| `getSubRows` | `(row) => TData[]` | | Tree data support |
+
+### Feature Flags
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `sortable` | `boolean` | `false` | Enable column sorting |
+| `filterable` | `boolean` | `false` | Enable column filtering |
+| `editable` | `boolean` | `true` | Enable cell editing |
+| `resizableColumns` | `boolean` | `true` | Enable column resize |
+| `formulasEnabled` | `boolean` | `true` | Enable HyperFormula |
+| `showToolbar` | `boolean` | `true` | Show toolbar |
+| `showFormulaBar` | `boolean` | `true` | Show formula bar |
+| `globalSearchable` | `boolean` | `false` | Show global search |
+
+### Layout Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `height` | `string \| number` | `"100%"` | Container height |
+| `className` | `string` | | Additional CSS classes |
+| `theme` | `"light" \| "dark"` | | Theme override |
+| `defaultColumnWidth` | `number` | `120` | Default column width |
+| `pinnedColumns` | `{ left?: string[], right?: string[] }` | | Pinned column IDs |
+| `grouping` | `string[]` | | Columns to group by |
+
+### Row Selection
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `rowSelection` | `"single" \| "multi" \| "none"` | `"multi"` | Row selection mode |
+
+### Callbacks
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `onCellChange` | `(change) => void \| boolean` | Cell edit callback. Return `false` to veto. |
+| `onSelectionChange` | `(selection) => void` | Selection changed |
+| `onBeforeCellEdit` | `(cell, row) => boolean` | Block edit entry. Return `false` to block. |
+| `onSort` | `(sorting) => void` | Sort changed |
+| `onFilter` | `(filters) => void` | Filter changed |
+| `onExport` | `(format) => void` | Export triggered |
+
+### Other
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `exportFileName` | `string` | Default filename for exports |
+| `mergeVirtualized` | `boolean` | Optimize merge rendering for large grids |
+
+## Basic Usage
+
+```tsx
+import { Spreadsheet, type ColumnConfig } from "@shadsheet/ui";
+
+type Row = {
+  name: string;
+  amount: number;
+  active: boolean;
+};
+
+const columns: ColumnConfig<Row>[] = [
+  { id: "name", header: "Name", editable: true, width: 200 },
+  { id: "amount", header: "Amount", type: "number", editable: true },
+  { id: "active", header: "Active", type: "checkbox", editable: true },
+];
+
+const data: Row[] = [
+  { name: "Alice", amount: 100, active: true },
+  { name: "Bob", amount: 200, active: false },
+];
+
+export function MySpreadsheet() {
+  return (
+    <div style={{ height: 500 }}>
+      <Spreadsheet
+        data={data}
+        columns={columns}
+        sortable
+        filterable
+        onCellChange={({ rowIndex, columnId, newValue }) => {
+          console.log(`Changed ${rowIndex}.${columnId} to ${newValue}`);
+        }}
+      />
+    </div>
+  );
+}
+```
+
+## With Ref
+
+```tsx
+import { useRef } from "react";
+import { Spreadsheet, type SpreadsheetRef } from "@shadsheet/ui";
+
+function MyComponent() {
+  const ref = useRef<SpreadsheetRef>(null);
+
+  return (
+    <>
+      <button onClick={() => ref.current?.exportToCSV()}>
+        Export CSV
+      </button>
+      <Spreadsheet ref={ref} data={data} columns={columns} />
+    </>
+  );
+}
+```
+
+## Tree Data
+
+```tsx
+const data = [
+  {
+    name: "Parent",
+    amount: 0,
+    children: [
+      { name: "Child 1", amount: 100 },
+      { name: "Child 2", amount: 200 },
+    ],
+  },
+];
+
+<Spreadsheet
+  data={data}
+  columns={columns}
+  getSubRows={(row) => row.children}
+/>
+```
+
+## Pinned Columns
+
+```tsx
+<Spreadsheet
+  data={data}
+  columns={columns}
+  pinnedColumns={{
+    left: ["id", "name"],
+    right: ["actions"]
+  }}
+/>
+```

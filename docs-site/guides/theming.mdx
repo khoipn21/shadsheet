@@ -1,0 +1,55 @@
+---
+title: Theming
+description: Customize ShadSheet's appearance with Tailwind CSS.
+---
+
+# Theming
+
+ShadSheet uses Tailwind CSS and follows shadcn/ui theming conventions.
+
+## CSS Variables
+
+ShadSheet respects these CSS variables:
+
+```css
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --primary: 222.2 47.4% 11.2%;
+  --primary-foreground: 210 40% 98%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --border: 214.3 31.8% 91.4%;
+  --destructive: 0 84.2% 60.2%;
+}
+```
+
+## Dark Mode
+
+```tsx
+<Spreadsheet data={data} columns={columns} theme="dark" />
+```
+
+Or use CSS class:
+
+```css
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  /* ... */
+}
+```
+
+## Custom Styling
+
+Override styles via `className`:
+
+```tsx
+<Spreadsheet
+  data={data}
+  columns={columns}
+  className="border-2 border-blue-500 rounded-xl"
+/>
+```

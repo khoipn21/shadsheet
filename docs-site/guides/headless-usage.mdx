@@ -1,0 +1,103 @@
+---
+title: Headless Usage
+description: Build custom spreadsheet UIs with hooks and sub-components.
+---
+
+# Headless Usage
+
+ShadSheet exports a layered API that lets you build completely custom spreadsheet UIs while reusing the core logic.
+
+## When to Go Headless
+
+- Need complete control over layout and styling
+- Building a domain-specific spreadsheet interface
+- Integrating with existing UI components
+- Performance optimization (render only what you need)
+
+## Basic Custom Layout
+
+```tsx
+import {
+  SpreadsheetProvider,
+  SpreadsheetGrid,
+  Toolbar,
+  FormulaBar,
+  StatusBar,
+  useSpreadsheetStore,
+} from "@shadsheet/ui";
+import "@shadsheet/ui/style.css";
+
+function CustomSpreadsheet({ data, columns }) {
+  const activeCell = useSpreadsheetStore((s) => s.activeCell);
+
+  return (
+    <SpreadsheetProvider data={data} columns={columns}>
+      <div className="flex flex-col h-full border rounded-lg">
+        {/* Custom header */}
+        <div className="bg-gray-100 p-2 border-b">
+          <h2>My Spreadsheet</h2>
+          {activeCell && <span>Selected: {activeCell.columnId}{activeCell.rowIndex + 1}</span>}
+        </div>
+
+        {/* Toolbar */}
+        <Toolbar columns={columns} className="border-b" />
+
+        {/* Formula bar */}
+        <FormulaBar className="border-b" />
+
+        {/* Main grid */}
+        <SpreadsheetGrid className="flex-1" />
+
+        {/* Custom footer */}
+        <div className="bg-gray-50 p-2 border-t text-sm text-gray-600">
+          Custom footer - <StatusBar totalRows={data.length} totalColumns={columns.length} selectedRowCount={0} visibleColumnIds={columns.map(c => c.id)} />
+        </div>
+      </div>
+    </SpreadsheetProvider>
+  );
+}
+```
+
+## Using Hooks Directly
+
+Build your own components using hooks:
+
+```tsx
+import { useSpreadsheetStore, useHyperFormula } from "@shadsheet/ui";
+
+function CustomFormulaBar() {
+  const activeCell = useSpreadsheetStore((s) => s.activeCell);
+  const hf = useHyperFormula();
+
+  if (!activeCell || !hf) return null;
+
+  const rawValue = hf.getCellFormula({ sheet: 0, row: activeCell.rowIndex, col: 0 });
+
+  return (
+    <input
+      value={rawValue ?? ""}
+      onChange={(e) => {
+        // Update HyperFormula...
+      }}
+    />
+  );
+}
+```
+
+## Standalone Store
+
+Create a store outside React for testing or server-side logic:
+
+```tsx
+import { createSpreadsheetStore } from "@shadsheet/ui";
+
+const store = createSpreadsheetStore(columns);
+
+// Subscribe to changes
+store.subscribe((state) => {
+  console.log("Active cell:", state.activeCell);
+});
+
+// Dispatch actions
+store.getState().setActiveCell({ rowIndex: 0, columnId: "A" });
+```

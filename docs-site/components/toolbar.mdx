@@ -1,0 +1,27 @@
+---
+title: Toolbar
+description: Formatting toolbar component.
+---
+
+# Toolbar
+
+Toolbar with formatting buttons and export options.
+
+## Props
+
+```tsx
+interface ToolbarProps {
+  columns: SpreadsheetColumnConfig[];
+  exportFileName?: string;
+  onExport?: (format: SpreadsheetExportFormat) => void;
+  className?: string;
+}
+```
+
+## Usage
+
+```tsx
+import { Toolbar } from "@shadsheet/ui";
+
+<Toolbar columns={columns} exportFileName="my-data" />
+```

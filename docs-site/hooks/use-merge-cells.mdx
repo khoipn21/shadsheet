@@ -1,0 +1,27 @@
+---
+title: useMergeCells
+description: Cell merging operations.
+---
+
+# useMergeCells
+
+Handles merging and unmerging cells.
+
+## Usage
+
+```tsx
+import { useMergeCells } from "@shadsheet/ui";
+
+const {
+  toggleMerge,
+  unmerge,
+  canMergeSelection,
+  isSelectionExactlyMerged,
+  getMergedCellAt,
+} = useMergeCells({
+  visibleColumnIds,
+  leftPinnedCount,
+  centerCount,
+  onClearCellValue,
+});
+```

@@ -1,0 +1,37 @@
+---
+title: Filter Utilities
+description: Column filter expression parser and evaluator.
+---
+
+# Filter Utilities
+
+## spreadsheetColumnFilterFn
+
+TanStack Table filter function for columns:
+
+```tsx
+import { spreadsheetColumnFilterFn } from "@shadsheet/ui";
+
+// Use in column definition
+columnDef.filterFn = spreadsheetColumnFilterFn;
+```
+
+## evaluateColumnFilter
+
+Evaluate a filter expression against a value:
+
+```tsx
+import { evaluateColumnFilter } from "@shadsheet/ui";
+
+const result = evaluateColumnFilter(100, {
+  search: "",
+  expression: ">50 && <200"
+});
+// true
+```
+
+## Expression Syntax
+
+- Comparison: `=`, `!=`, `>`, `>=`, `<`, `<=`
+- Logic: `&&`, `||`, `not`
+- Functions: `contains()`, `startsWith()`, `endsWith()`, `between()`, `in()`, `blank()`, `regex()`

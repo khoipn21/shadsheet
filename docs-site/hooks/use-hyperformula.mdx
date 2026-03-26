@@ -1,0 +1,29 @@
+---
+title: useHyperFormula
+description: Access the HyperFormula instance.
+---
+
+# useHyperFormula
+
+Access the HyperFormula engine for custom formula operations.
+
+## Usage
+
+```tsx
+import { useHyperFormula } from "@shadsheet/ui";
+
+function FormulaInfo() {
+  const hf = useHyperFormula();
+
+  if (!hf) return <span>Loading...</span>;
+
+  const version = hf.version();
+  const sheetCount = hf.countSheets();
+
+  return <span>HyperFormula {version} - {sheetCount} sheets</span>;
+}
+```
+
+<Warning>
+Must be used within a `SpreadsheetProvider`.
+</Warning>

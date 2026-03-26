@@ -1,0 +1,23 @@
+---
+title: useCellSelection
+description: Cell and range selection logic.
+---
+
+# useCellSelection
+
+Handles cell selection and range extension.
+
+## Usage
+
+```tsx
+import { useCellSelection } from "@shadsheet/ui";
+
+const { handleCellMouseDown, handleCellMouseEnter, handleMouseUp } = useCellSelection({
+  activeCell,
+  setActiveCell,
+  setSelection,
+  visibleColumnIds,
+  mergedCells,
+  mergedCellLookup,
+});
+```

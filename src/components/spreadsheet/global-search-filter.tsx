@@ -5,7 +5,11 @@ import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 
 const DEBOUNCE_MS = 300;
 
-export function GlobalSearchFilter() {
+interface GlobalSearchFilterProps {
+  className?: string;
+}
+
+export function GlobalSearchFilter({ className }: GlobalSearchFilterProps) {
   const globalFilter = useSpreadsheetStore((s) => s.globalFilter);
   const setGlobalFilter = useSpreadsheetStore((s) => s.setGlobalFilter);
   const [localValue, setLocalValue] = useState(globalFilter);
@@ -30,7 +34,7 @@ export function GlobalSearchFilter() {
   };
 
   return (
-    <div className="relative w-64">
+    <div className={`relative w-64 ${className ?? ""}`}>
       <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
       <Input
         value={localValue}

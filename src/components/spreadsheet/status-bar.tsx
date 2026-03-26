@@ -9,6 +9,7 @@ interface StatusBarProps {
   totalColumns: number;
   selectedRowCount: number;
   visibleColumnIds: string[];
+  className?: string;
 }
 
 /** Extract numeric values from a selection range via HyperFormula */
@@ -47,6 +48,7 @@ export function StatusBar({
   totalColumns,
   selectedRowCount,
   visibleColumnIds,
+  className,
 }: StatusBarProps) {
   const hf = useHyperFormula();
   const activeCell = useSpreadsheetStore((s) => s.activeCell);
@@ -87,7 +89,7 @@ export function StatusBar({
     Number.isInteger(n) ? n.toLocaleString() : n.toLocaleString(undefined, { maximumFractionDigits: 2 });
 
   return (
-    <div className="flex items-center justify-between border-t border-border px-3 py-1 text-xs text-muted-foreground bg-muted/30 gap-4">
+    <div className={`flex items-center justify-between border-t border-border px-3 py-1 text-xs text-muted-foreground bg-muted/30 gap-4 ${className ?? ""}`}>
       <div className="flex items-center gap-3">
         {cellLabel && (
           <span className="font-mono">{cellLabel}</span>

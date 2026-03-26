@@ -1,0 +1,23 @@
+---
+title: useAutoFill
+description: Fill handle for cell value propagation.
+---
+
+# useAutoFill
+
+Handles the fill handle drag for extending values.
+
+## Usage
+
+```tsx
+import { useAutoFill } from "@shadsheet/ui";
+
+const { fillHandlePosition, handleFillStart, handleFillEnd } = useAutoFill({
+  activeCell,
+  selectionRange,
+  visibleColumnIds,
+  totalRowCount,
+  hf,
+  incrementRenderTrigger,
+});
+```

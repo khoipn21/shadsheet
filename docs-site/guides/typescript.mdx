@@ -1,0 +1,70 @@
+---
+title: TypeScript
+description: TypeScript usage and type definitions.
+---
+
+# TypeScript
+
+ShadSheet is written in TypeScript and exports comprehensive types.
+
+## Generics
+
+All types accept a generic for your row data:
+
+```tsx
+import { Spreadsheet, type ColumnConfig, type SpreadsheetProps } from "@shadsheet/ui";
+
+interface MyRow {
+  id: string;
+  name: string;
+  amount: number;
+}
+
+const columns: ColumnConfig<MyRow>[] = [
+  { id: "name", header: "Name", editable: true },
+  { id: "amount", header: "Amount", type: "number", editable: true },
+];
+
+const props: SpreadsheetProps<MyRow> = {
+  data: [{ id: "1", name: "Test", amount: 100 }],
+  columns,
+};
+```
+
+## Exported Types
+
+```tsx
+// Core types
+export type CellValue = string | number | boolean | null | Date;
+export type SpreadsheetRowData = Record<string, CellValue>;
+
+// Cell types
+export interface CellAddress { rowIndex: number; columnId: string; }
+export interface SelectionRange { start: CellAddress; end: CellAddress; }
+
+// Column types
+export interface ColumnConfig<TData> { /* ... */ }
+export type ColumnType = "text" | "number" | "date" | "select" | "checkbox";
+
+// Callback types
+export interface SpreadsheetCellChange<TData> {
+  rowIndex: number;
+  columnId: string;
+  oldValue: CellValue;
+  newValue: CellValue;
+  rowData: TData | undefined;
+}
+
+// Ref type
+export interface SpreadsheetRef<TData> {
+  focus: () => void;
+  scrollToCell: (row: number, col: number | string) => void;
+  getSelectedData: () => CellValue[][];
+  getData: () => TData[];
+  setData: (data: TData[]) => void;
+  exportToCSV: () => void;
+  exportToXLSX: () => Promise<void>;
+  undo: () => void;
+  redo: () => void;
+}
+```

@@ -1,0 +1,19 @@
+---
+title: useColumnResize
+description: Column width resizing.
+---
+
+# useColumnResize
+
+Handles column resize drag interactions.
+
+## Usage
+
+```tsx
+import { useColumnResize } from "@shadsheet/ui";
+
+const { handleResizeStart, handleAutoFit } = useColumnResize({
+  onResize: (columnId, width) => { /* preview */ },
+  onResizeEnd: (columnId, width) => { /* commit */ },
+});
+```

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://ui.shadcn.com/schema/registry.json",
+  "name": "shadsheet",
+  "homepage": "https://shadsheet.dev",
+  "items": [
+    {
+      "name": "spreadsheet",
+      "type": "registry:component",
+      "title": "Spreadsheet",
+      "description": "Full-featured spreadsheet component with formulas, selection, filtering, sorting, virtualization, and export. Built with TanStack Table, HyperFormula, and Zustand.",
+      "dependencies": [
+        "@tanstack/react-table",
+        "@tanstack/react-virtual",
+        "zustand",
+        "hyperformula",
+        "immer",
+        "clsx",
+        "tailwind-merge",
+        "class-variance-authority",
+        "xlsx",
+        "zod"
+      ],
+      "peerDependencies": [
+        "lucide-react",
+        "@base-ui/react"
+      ],
+      "registryDependencies": ["button", "input", "dropdown-menu"]
+    }
+  ]
+}

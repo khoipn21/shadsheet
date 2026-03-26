@@ -1,0 +1,68 @@
+---
+title: Export Utilities
+description: Export spreadsheet data to CSV and XLSX formats.
+---
+
+# Export Utilities
+
+Standalone functions for exporting spreadsheet data.
+
+## exportToCSV
+
+Export to CSV file download:
+
+```tsx
+import { exportToCSV } from "@shadsheet/ui";
+import type { HyperFormula } from "hyperformula";
+
+// Within a component that has hf instance
+function handleExport(hf: HyperFormula, columns, columnVisibility) {
+  exportToCSV(
+    hf,                    // HyperFormula instance
+    0,                     // Sheet ID
+    columns,               // Column configs
+    columnVisibility,      // Visibility state
+    "my-data.csv",         // Filename
+    { mergedCells, mergedCellLookup },  // Optional merge state
+    visibleColumnIds       // Optional column order
+  );
+}
+```
+
+### Parameters
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `hf` | `HyperFormula` | Formula engine instance |
+| `sheetId` | `number` | Sheet index (usually 0) |
+| `columns` | `SpreadsheetColumnConfig[]` | Column definitions |
+| `columnVisibility` | `VisibilityState` | Hidden column map |
+| `filename` | `string` | Output filename |
+| `mergeState` | `MergeExportState` | Merged cell state |
+| `orderedVisibleColumnIds` | `string[]` | Custom column order |
+
+## exportToXLSX
+
+Export to Excel file:
+
+```tsx
+import { exportToXLSX } from "@shadsheet/ui";
+
+async function handleExport(hf, columns, columnVisibility) {
+  await exportToXLSX(
+    hf,
+    0,
+    columns,
+    columnVisibility,
+    "my-data.xlsx"
+  );
+}
+```
+
+<Note>
+XLSX export includes merged cells and number formatting.
+</Note>
+
+## CSV Injection Protection
+
+The CSV export automatically sanitizes values starting with `=`, `+`, `-`, `@` to prevent formula injection attacks.

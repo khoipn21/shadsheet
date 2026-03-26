@@ -1,0 +1,35 @@
+---
+title: createSpreadsheetStore
+description: Standalone Zustand store factory.
+---
+
+# createSpreadsheetStore
+
+Create a Zustand store outside React context.
+
+## Usage
+
+```tsx
+import { createSpreadsheetStore } from "@shadsheet/ui";
+
+const store = createSpreadsheetStore(columns);
+
+// Get current state
+const state = store.getState();
+console.log(state.activeCell);
+
+// Subscribe to changes
+store.subscribe((state) => {
+  console.log("State changed:", state.activeCell);
+});
+
+// Dispatch actions
+store.getState().setActiveCell({ rowIndex: 0, columnId: "A" });
+store.getState().startEditing({ rowIndex: 0, columnId: "A" });
+```
+
+## Use Cases
+
+- Testing store logic without React
+- Server-side state management
+- Integration with non-React code

@@ -1,0 +1,26 @@
+---
+title: ColumnHeaders
+description: Column header row component.
+---
+
+# ColumnHeaders
+
+Header row with sorting, filtering, and resize handles.
+
+## Props
+
+```tsx
+interface ColumnHeadersProps {
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+}
+```
+
+## Usage
+
+```tsx
+import { ColumnHeaders } from "@shadsheet/ui";
+
+const scrollRef = useRef<HTMLDivElement>(null);
+
+<ColumnHeaders scrollRef={scrollRef} />
+```

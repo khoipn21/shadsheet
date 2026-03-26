@@ -1,17 +1,17 @@
-# Spreadsheet
+# ShadSheet
 
-Reusable React spreadsheet component library built with React 19, TanStack Table, TanStack Virtual, Zustand, and HyperFormula.
+Headless React spreadsheet component library built with React 19, TanStack Table, TanStack Virtual, Zustand, and HyperFormula.
 
 ## Install
 
 ```bash
-npm install spreadsheet react react-dom
+npm install @shadsheet/ui react react-dom
 ```
 
 Import the bundled stylesheet once in your app entry:
 
 ```ts
-import "spreadsheet/style.css";
+import "@shadsheet/ui/style.css";
 ```
 
 ## Requirements
@@ -23,7 +23,7 @@ import "spreadsheet/style.css";
 ## Quick Start
 
 ```tsx
-import { Spreadsheet, type ColumnConfig } from "spreadsheet";
+import { Spreadsheet, type ColumnConfig } from "@shadsheet/ui";
 
 type Row = {
   A: string;
@@ -69,6 +69,67 @@ export function Example() {
 - Range selection, keyboard navigation, clipboard copy/cut/paste, and status bar aggregates
 - Toolbar formatting controls and CSV/XLSX export
 - Tree rows, grouping, row selection, and light or dark theme support
+
+## Headless API
+
+ShadSheet exports a layered API for different levels of control:
+
+### Components
+
+```tsx
+import {
+  Spreadsheet,        // Batteries-included
+  SpreadsheetGrid,    // Virtualized grid only
+  Toolbar,            // Formatting toolbar
+  FormulaBar,         // Formula input
+  StatusBar,          // Row count + aggregates
+  ColumnHeaders,      // Header row with sorting/filtering
+} from "@shadsheet/ui";
+```
+
+### Hooks
+
+```tsx
+import {
+  useSpreadsheetStore,   // Access Zustand store
+  useCellSelection,      // Selection logic
+  useClipboard,          // Copy/cut/paste
+  useKeyboardNavigation, // Arrow keys, Tab, Enter
+  useHyperFormula,       // Formula engine access
+  useMergeCells,         // Cell merging
+  useColumnResize,       // Column width resizing
+  useGridOperations,     // Insert/delete rows/columns
+  useAutoFill,           // Fill handle
+} from "@shadsheet/ui";
+```
+
+### Providers & Contexts
+
+```tsx
+import {
+  SpreadsheetProvider,   // Context wrapper
+  SpreadsheetContext,    // Zustand store context
+  TableContext,          // TanStack Table context
+  HyperFormulaContext,   // Formula engine context
+} from "@shadsheet/ui";
+```
+
+### Utilities
+
+```tsx
+import {
+  exportToCSV,               // CSV export
+  exportToXLSX,              // XLSX export
+  spreadsheetColumnFilterFn, // Filter expression parser
+  evaluateColumnFilter,      // Filter expression evaluator
+  validateCellValue,         // Zod-based validation
+  colIndexToLetter,          // Column index to letter (0→A)
+  letterToColIndex,          // Letter to column index (A→0)
+  toA1,                      // Row/col to A1 notation
+  fromA1,                    // A1 notation to row/col
+  createSpreadsheetStore,    // Standalone store factory
+} from "@shadsheet/ui";
+```
 
 ## Public Component Surface
 
@@ -171,3 +232,19 @@ npm run build-storybook
 - This package is browser-oriented. Clipboard, download, and DOM APIs are used directly.
 - Build and Storybook are configured. A dedicated automated test runner is not configured in `package.json` yet.
 - The docs only guarantee the features described here. Partially wired behavior in the codebase, such as structural row or column commands and auto-fill, is intentionally not advertised as stable package contract yet.
+
+## Migration from v0.2.x
+
+The package name changed from `spreadsheet` to `@shadsheet/ui`. Update your imports:
+
+```ts
+// Before
+import { Spreadsheet } from "spreadsheet";
+import "spreadsheet/style.css";
+
+// After
+import { Spreadsheet } from "@shadsheet/ui";
+import "@shadsheet/ui/style.css";
+```
+
+The CSS import is now required explicitly (no longer auto-imported).

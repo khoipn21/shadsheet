@@ -1,0 +1,64 @@
+---
+title: useSpreadsheetStore
+description: Access the Zustand store for spreadsheet state.
+---
+
+# useSpreadsheetStore
+
+Access the internal Zustand store to read and manipulate spreadsheet state.
+
+## Usage
+
+```tsx
+import { useSpreadsheetStore } from "@shadsheet/ui";
+
+function SelectionInfo() {
+  const activeCell = useSpreadsheetStore((s) => s.activeCell);
+  const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
+  const setActiveCell = useSpreadsheetStore((s) => s.setActiveCell);
+
+  return (
+    <div>
+      Active: {activeCell ? `${activeCell.rowIndex}:${activeCell.columnId}` : "None"}
+      <button onClick={() => setActiveCell({ rowIndex: 0, columnId: "A" })}>
+        Reset
+      </button>
+    </div>
+  );
+}
+```
+
+<Warning>
+Must be used within a `SpreadsheetProvider`.
+</Warning>
+
+## State Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `activeCell` | `CellAddress \| null` | Currently focused cell |
+| `selectionRange` | `SelectionRange \| null` | Selected range |
+| `editingCell` | `CellAddress \| null` | Cell being edited |
+| `editValue` | `CellValue` | Current edit value |
+| `sorting` | `SortingState` | TanStack sort state |
+| `columnFilters` | `ColumnFiltersState` | TanStack filter state |
+| `globalFilter` | `string` | Global search value |
+| `columnPinning` | `ColumnPinningState` | Pinned columns |
+| `columnVisibility` | `VisibilityState` | Hidden columns |
+| `rowSelection` | `RowSelectionState` | Selected row IDs |
+| `cellFormats` | `Record<string, CellFormat>` | Cell formatting |
+| `mergedCells` | `MergedCell[]` | Merged regions |
+
+## Actions
+
+| Action | Signature | Description |
+|--------|-----------|-------------|
+| `setActiveCell` | `(cell) => void` | Set focused cell |
+| `setSelection` | `(range) => void` | Set selection range |
+| `startEditing` | `(cell, overwrite?) => void` | Begin editing |
+| `cancelEdit` | `() => void` | Cancel editing |
+| `setSorting` | `(sorting) => void` | Update sort state |
+| `setGlobalFilter` | `(filter) => void` | Update search |
+| `pinColumn` | `(id, position) => void` | Pin/unpin column |
+| `toggleBold` | `(keys) => void` | Toggle bold |
+| `mergeCells` | `(range, ids) => void` | Merge selection |

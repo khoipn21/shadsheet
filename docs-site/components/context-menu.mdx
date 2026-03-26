@@ -1,0 +1,28 @@
+---
+title: ContextMenu
+description: Right-click context menu component.
+---
+
+# ContextMenu
+
+Context menu with cut/copy/paste, merge, insert, delete, and sort options.
+
+## Props
+
+```tsx
+interface ContextMenuProps {
+  visibleColumnIds: string[];
+  leftPinnedCount: number;
+  centerCount: number;
+  totalRowCount: number;
+  meta?: SpreadsheetTableMeta;
+  getCellValue: (rowIndex: number, columnId: string) => CellValue;
+  canEditCell: (rowIndex: number, columnId: string) => boolean;
+  onSort?: (columnId: string, desc: boolean) => void;
+  onInsertRow?: (rowIndex: number, position: "above" | "below") => void;
+  onDeleteRow?: (rowIndex: number) => void;
+  onInsertColumn?: (colIndex: number, position: "left" | "right") => void;
+  onDeleteColumn?: (colIndex: number) => void;
+  className?: string;
+}
+```

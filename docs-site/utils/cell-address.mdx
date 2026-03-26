@@ -1,0 +1,40 @@
+---
+title: Cell Address Utilities
+description: A1 notation utilities.
+---
+
+# Cell Address Utilities
+
+## colIndexToLetter
+
+Convert 0-based column index to letter:
+
+```tsx
+import { colIndexToLetter } from "@shadsheet/ui";
+
+colIndexToLetter(0);   // "A"
+colIndexToLetter(25);  // "Z"
+colIndexToLetter(26);  // "AA"
+```
+
+## letterToColIndex
+
+Convert letter to 0-based index:
+
+```tsx
+import { letterToColIndex } from "@shadsheet/ui";
+
+letterToColIndex("A");   // 0
+letterToColIndex("AA");  // 26
+```
+
+## toA1 / fromA1
+
+Convert to/from A1 notation:
+
+```tsx
+import { toA1, fromA1 } from "@shadsheet/ui";
+
+toA1(0, 0);  // "A1"
+fromA1("B5"); // { row: 4, col: 1 }
+```

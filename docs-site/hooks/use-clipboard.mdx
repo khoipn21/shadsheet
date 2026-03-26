@@ -1,0 +1,26 @@
+---
+title: useClipboard
+description: Copy, cut, and paste operations.
+---
+
+# useClipboard
+
+Handles clipboard operations with HyperFormula integration.
+
+## Usage
+
+```tsx
+import { useClipboard } from "@shadsheet/ui";
+
+const { handleCopy, handleCut, handlePaste } = useClipboard({
+  activeCell,
+  selectionRange,
+  visibleColumnIds,
+  totalRowCount,
+  meta,
+  getCellValue,
+  canEditCell,
+  hf,
+  incrementRenderTrigger,
+});
+```

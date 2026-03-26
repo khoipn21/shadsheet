@@ -1,0 +1,33 @@
+---
+title: StatusBar
+description: Status bar with row count and aggregates.
+---
+
+# StatusBar
+
+Displays row/column counts and numeric aggregates for selections.
+
+## Props
+
+```tsx
+interface StatusBarProps {
+  totalRows: number;
+  totalColumns: number;
+  selectedRowCount: number;
+  visibleColumnIds: string[];
+  className?: string;
+}
+```
+
+## Usage
+
+```tsx
+import { StatusBar } from "@shadsheet/ui";
+
+<StatusBar
+  totalRows={data.length}
+  totalColumns={columns.length}
+  selectedRowCount={0}
+  visibleColumnIds={columns.map(c => c.id)}
+/>
+```

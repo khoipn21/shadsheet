@@ -1,0 +1,94 @@
+---
+title: Installation
+description: Install ShadSheet in your React project.
+---
+
+# Installation
+
+## Requirements
+
+- React 19+
+- Node.js 20+
+- Tailwind CSS 4+
+
+## Install Package
+
+```bash
+npm install @shadsheet/ui
+```
+
+### Peer Dependencies
+
+ShadSheet requires these peer dependencies:
+
+```bash
+npm install react react-dom lucide-react @base-ui/react
+```
+
+## Import Styles
+
+Import the CSS in your app entry point:
+
+```tsx
+// main.tsx or App.tsx
+import "@shadsheet/ui/style.css";
+```
+
+<Note>
+The CSS import is **required**. It's not auto-imported to support headless usage.
+</Note>
+
+## Tailwind Configuration
+
+Ensure your `tailwind.config.js` includes ShadSheet's classes:
+
+```js
+// tailwind.config.js
+export default {
+  content: [
+    "./src/**/*.{js,ts,jsx,tsx}",
+    "./node_modules/@shadsheet/ui/dist/**/*.{js,ts,jsx,tsx}",
+  ],
+  // ... rest of config
+}
+```
+
+## Verify Installation
+
+Create a simple spreadsheet to verify everything works:
+
+```tsx
+import { Spreadsheet, type ColumnConfig } from "@shadsheet/ui";
+import "@shadsheet/ui/style.css";
+
+type Row = {
+  name: string;
+  amount: number;
+  active: boolean;
+};
+
+const columns: ColumnConfig<Row>[] = [
+  { id: "name", header: "Name", editable: true, width: 180 },
+  { id: "amount", header: "Amount", type: "number", editable: true },
+  { id: "active", header: "Active", type: "checkbox", editable: true },
+];
+
+const data: Row[] = [
+  { name: "Alpha", amount: 100, active: true },
+  { name: "Beta", amount: 200, active: false },
+];
+
+export function App() {
+  return (
+    <div style={{ height: 400 }}>
+      <Spreadsheet data={data} columns={columns} />
+    </div>
+  );
+}
+```
+
+## Next Steps
+
+- [Quick Start](/quick-start) - Build your first spreadsheet
+- [Concepts](/concepts) - Understand the architecture
+- [Headless Usage](/guides/headless-usage) - Use hooks and sub-components

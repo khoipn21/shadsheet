@@ -7,11 +7,15 @@ import { TableContext } from "./spreadsheet-provider";
 import type { SpreadsheetTableMeta } from "@/types/spreadsheet-types";
 import { FormulaReferenceInput } from "./formula-reference-input";
 
+interface FormulaBarProps {
+  className?: string;
+}
+
 /**
  * Formula bar: shows cell address label + raw formula/value of active cell.
  * Editing the formula bar commits through HyperFormula.
  */
-export function FormulaBar() {
+export function FormulaBar({ className }: FormulaBarProps) {
   const hf = useHyperFormula();
   const table = useContext(TableContext);
   const activeCell = useSpreadsheetStore((s) => s.activeCell);
@@ -107,7 +111,7 @@ export function FormulaBar() {
   const isCellEditing = editingCell !== null;
 
   return (
-    <div className="flex items-center gap-2 border border-border rounded-md bg-background px-2 h-8 text-sm">
+    <div className={`flex items-center gap-2 border border-border rounded-md bg-background px-2 h-8 text-sm ${className ?? ""}`}>
       {/* Cell address label */}
       <span className="font-mono text-muted-foreground w-12 text-center flex-shrink-0 select-none">
         {cellLabel}

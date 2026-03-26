@@ -1,0 +1,32 @@
+---
+title: Validation Utilities
+description: Zod-based cell validation.
+---
+
+# Validation Utilities
+
+## validateCellValue
+
+Validate against column's Zod schema:
+
+```tsx
+import { validateCellValue } from "@shadsheet/ui";
+
+const result = validateCellValue("test@example.com", {
+  id: "email",
+  header: "Email",
+  validation: z.string().email()
+});
+
+// { success: true } or { success: false, error: "Invalid email" }
+```
+
+## isCellEditable
+
+Check if a cell can be edited:
+
+```tsx
+import { isCellEditable } from "@shadsheet/ui";
+
+const editable = isCellEditable(columnConfig, rowData);
+```

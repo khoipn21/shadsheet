@@ -29,6 +29,7 @@ interface ContextMenuProps {
   onDeleteRow?: (rowIndex: number) => void;
   onInsertColumn?: (colIndex: number, position: "left" | "right") => void;
   onDeleteColumn?: (colIndex: number) => void;
+  className?: string;
 }
 
 export function ContextMenu({
@@ -44,6 +45,7 @@ export function ContextMenu({
   onDeleteRow,
   onInsertColumn,
   onDeleteColumn,
+  className,
 }: ContextMenuProps) {
   const contextMenu = useSpreadsheetStore((s) => s.contextMenu);
   const setContextMenu = useSpreadsheetStore((s) => s.setContextMenu);
@@ -139,7 +141,7 @@ export function ContextMenu({
   return createPortal(
     <div
       ref={menuRef}
-      className="fixed z-50 min-w-[200px] bg-popover border border-border rounded-md shadow-md py-1 animate-in fade-in-0 zoom-in-95"
+      className={`fixed z-50 min-w-[200px] bg-popover border border-border rounded-md shadow-md py-1 animate-in fade-in-0 zoom-in-95 ${className ?? ""}`}
       style={{ left: clampedX, top: clampedY }}
     >
       {menuItem("Cut", <Scissors className="w-3.5 h-3.5" />, handleCut, "Ctrl+X")}

@@ -42,6 +42,7 @@ const treeData = [
 ];
 
 const meta = {
+  title: "ShadSheet/Spreadsheet",
   component: Spreadsheet,
   args: {
     data: baseData,

@@ -1,0 +1,20 @@
+---
+title: useGridOperations
+description: Insert and delete rows/columns.
+---
+
+# useGridOperations
+
+Grid structural operations.
+
+## Usage
+
+```tsx
+import { useGridOperations } from "@shadsheet/ui";
+
+const { insertRow, deleteRow, insertColumn, deleteColumn } = useGridOperations();
+
+insertRow(5, "below");  // Insert row after row 5
+deleteRow(5);           // Delete row 5
+insertColumn(2, "left"); // Insert column left of index 2
+```

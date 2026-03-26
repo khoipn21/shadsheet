@@ -1,0 +1,197 @@
+---
+title: Quick Start
+description: Get started with ShadSheet in 5 minutes.
+---
+
+# Quick Start
+
+## Basic Spreadsheet
+
+The simplest way to use ShadSheet is the `Spreadsheet` component:
+
+```tsx
+import { Spreadsheet, type ColumnConfig } from "@shadsheet/ui";
+import "@shadsheet/ui/style.css";
+
+type Row = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+const columns: ColumnConfig<Row>[] = [
+  { id: "id", header: "ID", width: 80 },
+  { id: "name", header: "Name", editable: true, width: 200 },
+  { id: "email", header: "Email", editable: true, width: 250 },
+  { id: "role", header: "Role", type: "select", editable: true, options: [
+    { label: "Admin", value: "admin" },
+    { label: "User", value: "user" },
+    { label: "Guest", value: "guest" },
+  ]},
+];
+
+const data: Row[] = [
+  { id: "1", name: "Alice", email: "alice@example.com", role: "admin" },
+  { id: "2", name: "Bob", email: "bob@example.com", role: "user" },
+];
+
+export function App() {
+  return (
+    <div style={{ height: 500 }}>
+      <Spreadsheet
+        data={data}
+        columns={columns}
+        sortable
+        filterable
+        editable
+        onCellChange={({ rowIndex, columnId, newValue }) => {
+          console.log(`Cell ${rowIndex}.${columnId} changed to:`, newValue);
+        }}
+      />
+    </div>
+  );
+}
+```
+
+## Column Types
+
+ShadSheet supports several column types:
+
+### Text
+
+```tsx
+{ id: "name", header: "Name", type: "text", editable: true }
+```
+
+### Number
+
+```tsx
+{ id: "amount", header: "Amount", type: "number", editable: true }
+```
+
+### Checkbox
+
+```tsx
+{ id: "active", header: "Active", type: "checkbox", editable: true }
+```
+
+### Date
+
+```tsx
+{ id: "created", header: "Created", type: "date", editable: true }
+```
+
+### Select
+
+```tsx
+{
+  id: "status",
+  header: "Status",
+  type: "select",
+  editable: true,
+  options: [
+    { label: "Pending", value: "pending" },
+    { label: "Approved", value: "approved" },
+    { label: "Rejected", value: "rejected" },
+  ]
+}
+```
+
+## Cell Changes
+
+Handle cell edits with `onCellChange`:
+
+```tsx
+<Spreadsheet
+  data={data}
+  columns={columns}
+  onCellChange={({ rowIndex, columnId, oldValue, newValue, rowData }) => {
+    // Update your state/backend
+    updateRow(rowIndex, columnId, newValue);
+
+    // Return false to veto the change
+    // return false;
+  }}
+/>
+```
+
+## Formulas
+
+Enable formulas with the `formulasEnabled` prop:
+
+```tsx
+const data = [
+  { item: "Widget", price: 100, quantity: 5, total: "=B1*C1" },
+  { item: "Gadget", price: 50, quantity: 10, total: "=B2*C2" },
+];
+
+<Spreadsheet
+  data={data}
+  columns={columns}
+  formulasEnabled
+  showFormulaBar
+/>
+```
+
+<Note>
+Formulas use HyperFormula syntax (Excel-compatible).
+</Note>
+
+## Selection Tracking
+
+Track cell selection changes:
+
+```tsx
+<Spreadsheet
+  data={data}
+  columns={columns}
+  onSelectionChange={(selection) => {
+    console.log("Active cell:", selection.activeCell);
+    console.log("Selection range:", selection.selectionRange);
+    console.log("Selected rows:", selection.selectedRows);
+  }}
+/>
+```
+
+## Ref API
+
+Use a ref for imperative control:
+
+```tsx
+import { useRef } from "react";
+import { Spreadsheet, type SpreadsheetRef } from "@shadsheet/ui";
+
+function MyComponent() {
+  const ref = useRef<SpreadsheetRef>(null);
+
+  const handleExport = () => {
+    ref.current?.exportToCSV();
+  };
+
+  const handleScroll = () => {
+    ref.current?.scrollToCell(50, "name");
+  };
+
+  return (
+    <>
+      <button onClick={handleExport}>Export CSV</button>
+      <Spreadsheet ref={ref} data={data} columns={columns} />
+    </>
+  );
+}
+```
+
+### Ref Methods
+
+| Method | Description |
+|--------|-------------|
+| `focus()` | Focus the grid for keyboard input |
+| `scrollToCell(row, col)` | Scroll to a specific cell |
+| `getSelectedData()` | Get selected range as 2D array |
+| `getData()` | Get all row data |
+| `setData(data)` | Replace all data |
+| `exportToCSV()` | Download as CSV |
+| `exportToXLSX()` | Download as XLSX |
+| `undo()` | Undo last change |
+| `redo()` | Redo last undone change |

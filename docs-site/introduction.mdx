@@ -1,0 +1,77 @@
+---
+title: Introduction
+description: Headless React spreadsheet component library built with TanStack Table, HyperFormula, and shadcn conventions.
+---
+
+# ShadSheet
+
+ShadSheet is a headless React spreadsheet component library that gives you full control over styling while handling all the complex logic.
+
+## Why ShadSheet?
+
+### Headless-First
+
+Unlike traditional spreadsheet components that lock you into specific styling, ShadSheet exports:
+
+- **Hooks** for state management (`useSpreadsheetStore`, `useCellSelection`, `useClipboard`)
+- **Sub-components** for composition (`Toolbar`, `FormulaBar`, `SpreadsheetGrid`)
+- **Utilities** for data operations (`exportToCSV`, `validateCellValue`)
+
+Build your own UI or use the batteries-included `Spreadsheet` component.
+
+### Layered Architecture
+
+```
+┌─────────────────────────────────────────┐
+│  <Spreadsheet />  (batteries-included)  │  ← Default: import and go
+├─────────────────────────────────────────┤
+│  Sub-components: Toolbar, FormulaBar,   │  ← Compose your own layout
+│  Grid, StatusBar, ColumnHeaders, etc.   │
+├─────────────────────────────────────────┤
+│  Hooks: useSpreadsheetStore, useCell,   │  ← Full control over state
+│  useSelection, useClipboard, etc.       │
+├─────────────────────────────────────────┤
+│  Utils: export, filter, formula, merge  │  ← Standalone utilities
+├─────────────────────────────────────────┤
+│  Types: all public interfaces           │  ← TypeScript-first
+└─────────────────────────────────────────┘
+```
+
+### Feature-Rich
+
+- **Virtualization** - Handle 100K+ rows with TanStack Virtual
+- **Formulas** - Full Excel-compatible formulas via HyperFormula
+- **Selection** - Range selection, keyboard navigation, clipboard
+- **Filtering** - Global search + per-column expression filters
+- **Sorting** - Multi-column sort with TanStack Table
+- **Pinning** - Left and right pinned columns
+- **Merging** - Cell merging with undo/redo
+- **Export** - CSV and XLSX download
+- **Formatting** - Bold, italic, colors, alignment
+- **Theming** - Light/dark mode, Tailwind CSS
+
+## Quick Comparison
+
+| Feature | ShadSheet | TanStack Table | React Data Grid |
+|---------|-----------|----------------|-----------------|
+| Headless | ✓ (layered) | ✓ | ✗ |
+| Formulas | ✓ (HyperFormula) | ✗ | ✓ |
+| Virtualization | ✓ | ✓ | ✓ |
+| Cell Merging | ✓ | ✗ | ✓ |
+| Bundle Size | ~150KB | ~45KB | ~200KB |
+| Styling | Tailwind/shadcn | BYO | Built-in |
+
+## When to Use ShadSheet
+
+**Good fit:**
+
+- Building data-intensive React applications
+- Need spreadsheet-like editing with formulas
+- Want headless control over styling
+- Using Tailwind CSS and shadcn/ui
+
+**Consider alternatives:**
+
+- Simple tables without editing → TanStack Table
+- Need complete built-in styling → AG Grid, React Data Grid
+- Non-React environments

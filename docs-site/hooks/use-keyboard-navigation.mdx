@@ -1,0 +1,32 @@
+---
+title: useKeyboardNavigation
+description: Keyboard navigation and editing.
+---
+
+# useKeyboardNavigation
+
+Handles arrow keys, Tab, Enter, and editing shortcuts.
+
+## Usage
+
+```tsx
+import { useKeyboardNavigation } from "@shadsheet/ui";
+
+const { handleKeyDown } = useKeyboardNavigation({
+  activeCell,
+  editingCell,
+  selectionRange,
+  setActiveCell,
+  setSelection,
+  startEditing,
+  visibleColumnIds,
+  totalRowCount,
+  viewportRowCount,
+  meta,
+  canEditCell,
+  rowVirtualizer,
+  colVirtualizer,
+  hf,
+  incrementRenderTrigger,
+});
+```
