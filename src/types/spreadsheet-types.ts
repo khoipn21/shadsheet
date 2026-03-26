@@ -169,7 +169,6 @@ export type SpreadsheetExportFormat = "csv" | "xlsx";
 export interface SpreadsheetFeatureFlags {
   editable: boolean;
   resizableColumns: boolean;
-  reorderableColumns: boolean;
   formulasEnabled: boolean;
   onBeforeCellEdit?: (
     cell: CellAddress,
@@ -213,7 +212,6 @@ export interface SpreadsheetProps<
   filterable?: boolean;
   editable?: boolean;
   resizableColumns?: boolean;
-  reorderableColumns?: boolean;
   formulasEnabled?: boolean;
   showToolbar?: boolean;
   showFormulaBar?: boolean;
@@ -251,6 +249,7 @@ export interface SpreadsheetUIState {
   columnFilters: ColumnFiltersState;
   globalFilter: string;
   columnOrder: string[];
+  columnResizePreview: Record<string, number>;
   columnPinning: ColumnPinningState;
   columnVisibility: VisibilityState;
   rowSelection: RowSelectionState;
@@ -279,6 +278,7 @@ export interface SpreadsheetUIActions {
   setGlobalFilter: (filter: string) => void;
   setColumns: (columns: SpreadsheetColumnConfig[]) => void;
   setColumnOrder: (order: string[]) => void;
+  setColumnResizePreview: (columnId: string, width: number | null) => void;
   setColumnPinning: (pinning: ColumnPinningState) => void;
   setColumnVisibility: (visibility: VisibilityState) => void;
   pinColumn: (columnId: string, position: PinPosition) => void;

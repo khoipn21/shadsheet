@@ -67,7 +67,6 @@ interface SpreadsheetProviderProps<TData extends SpreadsheetRowData> {
 const DEFAULT_FEATURE_FLAGS: SpreadsheetFeatureFlags = {
   editable: true,
   resizableColumns: true,
-  reorderableColumns: true,
   formulasEnabled: true,
 };
 

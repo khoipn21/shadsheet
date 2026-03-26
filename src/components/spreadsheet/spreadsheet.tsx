@@ -116,7 +116,6 @@ function SpreadsheetInner<TData extends SpreadsheetRowData>(
     filterable = true,
     editable = true,
     resizableColumns = true,
-    reorderableColumns = true,
     formulasEnabled = true,
     showToolbar = true,
     showFormulaBar = true,
@@ -307,7 +306,6 @@ function SpreadsheetInner<TData extends SpreadsheetRowData>(
         featureFlags={{
           editable,
           resizableColumns,
-          reorderableColumns,
           formulasEnabled,
           onBeforeCellEdit: onBeforeCellEdit
             ? (cell, rowData) => onBeforeCellEdit(cell, rowData as TData)

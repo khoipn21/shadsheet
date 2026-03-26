@@ -91,7 +91,6 @@ export const ColumnFeatures: Story = {
     pinnedColumns: { left: ["A"], right: ["C"] },
     sortable: true,
     resizableColumns: true,
-    reorderableColumns: true,
   },
 };
 

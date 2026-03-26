@@ -54,6 +54,8 @@ export function ColumnHeaderMenu({
             ? "opacity-100 text-primary"
             : "opacity-0 group-hover:opacity-60 hover:opacity-100"
         }`}
+        onMouseDown={(e) => e.stopPropagation()}
+        onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
       >
         {hasActiveFilter ? (

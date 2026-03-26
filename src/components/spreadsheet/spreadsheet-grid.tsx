@@ -55,6 +55,7 @@ export function SpreadsheetGrid({
   const gridColumnFilters = useSpreadsheetStore((s) => s.columnFilters);
   const gridGlobalFilter = useSpreadsheetStore((s) => s.globalFilter);
   const gridColumnOrder = useSpreadsheetStore((s) => s.columnOrder);
+  const gridColumnResizePreview = useSpreadsheetStore((s) => s.columnResizePreview);
   const gridColumnPinning = useSpreadsheetStore((s) => s.columnPinning);
   const gridColumnVisibility = useSpreadsheetStore((s) => s.columnVisibility);
   const gridRowSelection = useSpreadsheetStore((s) => s.rowSelection);
@@ -189,8 +190,12 @@ export function SpreadsheetGrid({
     count: centerColumns.length,
     getScrollElement: () => scrollRef.current,
     estimateSize: useCallback(
-      (index: number) => centerColumns[index]?.getSize() ?? DEFAULT_COL_WIDTH,
-      [centerColumns],
+      (index: number) => {
+        const column = centerColumns[index];
+        if (!column) return DEFAULT_COL_WIDTH;
+        return gridColumnResizePreview[column.id] ?? column.getSize() ?? DEFAULT_COL_WIDTH;
+      },
+      [centerColumns, gridColumnResizePreview],
     ),
     horizontal: true,
     overscan: COL_OVERSCAN,
@@ -200,10 +205,23 @@ export function SpreadsheetGrid({
   const virtualCols = colVirtualizer.getVirtualItems();
   const totalHeight = rowVirtualizer.getTotalSize();
   const totalCenterWidth = colVirtualizer.getTotalSize();
+  const centerColumnSizeKey = centerColumns
+    .map((column) => `${column.id}:${gridColumnResizePreview[column.id] ?? column.getSize()}`)
+    .join("|");
+
+  useEffect(() => {
+    colVirtualizer.measure();
+  }, [centerColumnSizeKey, colVirtualizer]);
 
   // Total widths for pinned panes (non-virtualized)
-  const leftWidth = leftColumns.reduce((sum, col) => sum + (col.getSize() ?? DEFAULT_COL_WIDTH), 0);
-  const rightWidth = rightColumns.reduce((sum, col) => sum + (col.getSize() ?? DEFAULT_COL_WIDTH), 0);
+  const leftWidth = leftColumns.reduce(
+    (sum, col) => sum + (gridColumnResizePreview[col.id] ?? col.getSize() ?? DEFAULT_COL_WIDTH),
+    0,
+  );
+  const rightWidth = rightColumns.reduce(
+    (sum, col) => sum + (gridColumnResizePreview[col.id] ?? col.getSize() ?? DEFAULT_COL_WIDTH),
+    0,
+  );
 
   const pinnedTopHeight = pinnedTopRows.length * ROW_HEIGHT;
   const pinnedBottomHeight = pinnedBottomRows.length * ROW_HEIGHT;
@@ -427,13 +445,14 @@ export function SpreadsheetGrid({
       onContextMenu={handleContextMenu}
     >
       {/* Pinned top rows — fixed above scroll area */}
-      {pinnedTopRows.length > 0 && (
-        <FixedRowBand
-          rows={pinnedTopRows}
-          bandHeight={pinnedTopHeight}
-          centerColumns={centerColumns}
-          hasLeftPinned={hasLeftPinned}
-          hasRightPinned={hasRightPinned}
+        {pinnedTopRows.length > 0 && (
+          <FixedRowBand
+            rows={pinnedTopRows}
+            bandHeight={pinnedTopHeight}
+            centerColumns={centerColumns}
+            columnResizePreview={gridColumnResizePreview}
+            hasLeftPinned={hasLeftPinned}
+            hasRightPinned={hasRightPinned}
           leftWidth={leftWidth}
           rightWidth={rightWidth}
           label="pinned-top"
@@ -454,15 +473,16 @@ export function SpreadsheetGrid({
         <div className="flex" style={{ minHeight: totalHeight }}>
           {/* Left pinned pane */}
           {hasLeftPinned && (
-            <PinnedPane
-              rows={scrollableRows}
-              virtualRows={virtualRows}
-              totalHeight={totalHeight}
-              paneWidth={leftWidth}
-              side="left"
-              isCellActive={isCellActive}
-              isCellSelected={isCellSelected}
-                onCellMouseDown={handleCellMouseDown}
+              <PinnedPane
+                rows={scrollableRows}
+                virtualRows={virtualRows}
+                totalHeight={totalHeight}
+                paneWidth={leftWidth}
+                side="left"
+                columnResizePreview={gridColumnResizePreview}
+                isCellActive={isCellActive}
+                isCellSelected={isCellSelected}
+                  onCellMouseDown={handleCellMouseDown}
                 onCellMouseEnter={handleCellMouseEnter}
                 getFormulaReferenceColor={getFormulaReferenceColor}
                 onNavigate={handleNavigate}
@@ -491,13 +511,13 @@ export function SpreadsheetGrid({
                     if (!cell) return null;
                     const cId = cell.column.id;
                     const rIdx = cell.row.index;
-                    return (
-                      <CellRenderer
-                        key={cell.id}
-                        cell={cell as Cell<Record<string, CellValue>, unknown>}
-                        width={virtualCol.size}
-                        height={virtualRow.size}
-                        translateX={virtualCol.start}
+                      return (
+                        <CellRenderer
+                          key={cell.id}
+                          cell={cell as Cell<Record<string, CellValue>, unknown>}
+                          width={gridColumnResizePreview[cId] ?? virtualCol.size}
+                          height={virtualRow.size}
+                          translateX={virtualCol.start}
                         isActive={isCellActive(rIdx, cId)}
                           isSelected={isCellSelected(rIdx, cId)}
                           rowSelected={isRowSelected}
@@ -537,14 +557,15 @@ export function SpreadsheetGrid({
 
           {/* Right pinned pane */}
           {hasRightPinned && (
-            <PinnedPane
-              rows={scrollableRows}
-              virtualRows={virtualRows}
-              totalHeight={totalHeight}
-              paneWidth={rightWidth}
-              side="right"
-              isCellActive={isCellActive}
-              isCellSelected={isCellSelected}
+              <PinnedPane
+                rows={scrollableRows}
+                virtualRows={virtualRows}
+                totalHeight={totalHeight}
+                paneWidth={rightWidth}
+                side="right"
+                columnResizePreview={gridColumnResizePreview}
+                isCellActive={isCellActive}
+                isCellSelected={isCellSelected}
                 onCellMouseDown={handleCellMouseDown}
                 onCellMouseEnter={handleCellMouseEnter}
                 getFormulaReferenceColor={getFormulaReferenceColor}
@@ -556,13 +577,14 @@ export function SpreadsheetGrid({
 
       {/* Pinned bottom rows — fixed below scroll area */}
       {pinnedBottomRows.length > 0 && (
-        <FixedRowBand
-          rows={pinnedBottomRows}
-          bandHeight={pinnedBottomHeight}
-          centerColumns={centerColumns}
-          hasLeftPinned={hasLeftPinned}
-          hasRightPinned={hasRightPinned}
-          leftWidth={leftWidth}
+          <FixedRowBand
+            rows={pinnedBottomRows}
+            bandHeight={pinnedBottomHeight}
+            centerColumns={centerColumns}
+            columnResizePreview={gridColumnResizePreview}
+            hasLeftPinned={hasLeftPinned}
+            hasRightPinned={hasRightPinned}
+            leftWidth={leftWidth}
           rightWidth={rightWidth}
           label="pinned-bottom"
           isCellActive={isCellActive}
@@ -619,6 +641,7 @@ function PinnedPane({
   totalHeight,
   paneWidth,
   side,
+  columnResizePreview,
   isCellActive,
   isCellSelected,
   onCellMouseDown,
@@ -631,6 +654,7 @@ function PinnedPane({
   totalHeight: number;
   paneWidth: number;
   side: "left" | "right";
+  columnResizePreview: Record<string, number>;
 } & SelectionCallbacks) {
   return (
     <div
@@ -651,11 +675,12 @@ function PinnedPane({
               height: virtualRow.size,
               transform: `translateY(${virtualRow.start}px)`,
             }}
-          >
-            {cells.map((cell) => {
-              const width = cell.column.getSize();
-              const translateX = offset;
-              offset += width;
+            >
+              {cells.map((cell) => {
+                const width =
+                  columnResizePreview[cell.column.id] ?? cell.column.getSize();
+                const translateX = offset;
+                offset += width;
               const cId = cell.column.id;
               const rIdx = cell.row.index;
                 return (
@@ -688,6 +713,7 @@ function FixedRowBand({
   rows,
   bandHeight,
   centerColumns,
+  columnResizePreview,
   hasLeftPinned,
   hasRightPinned,
   leftWidth,
@@ -703,13 +729,17 @@ function FixedRowBand({
   rows: Row<Record<string, CellValue>>[];
   bandHeight: number;
   centerColumns: { id: string; getSize: () => number }[];
+  columnResizePreview: Record<string, number>;
   hasLeftPinned: boolean;
   hasRightPinned: boolean;
   leftWidth: number;
   rightWidth: number;
   label: string;
 } & SelectionCallbacks) {
-  const centerWidth = centerColumns.reduce((sum, col) => sum + (col.getSize() ?? DEFAULT_COL_WIDTH), 0);
+  const centerWidth = centerColumns.reduce(
+    (sum, col) => sum + (columnResizePreview[col.id] ?? col.getSize() ?? DEFAULT_COL_WIDTH),
+    0,
+  );
 
   return (
     <div
@@ -723,11 +753,12 @@ function FixedRowBand({
             const cells = row.getLeftVisibleCells();
             let offset = 0;
             return (
-              <div key={row.id} className="relative" style={{ height: ROW_HEIGHT }}>
-                {cells.map((cell) => {
-                  const width = cell.column.getSize();
-                  const translateX = offset;
-                  offset += width;
+                <div key={row.id} className="relative" style={{ height: ROW_HEIGHT }}>
+                  {cells.map((cell) => {
+                    const width =
+                      columnResizePreview[cell.column.id] ?? cell.column.getSize();
+                    const translateX = offset;
+                    offset += width;
                   const cId = cell.column.id;
                   const rIdx = cell.row.index;
                     return (
@@ -759,11 +790,12 @@ function FixedRowBand({
           const centerCells = row.getCenterVisibleCells();
           let offset = 0;
           return (
-            <div key={row.id} className="relative" style={{ height: ROW_HEIGHT }}>
-              {centerCells.map((cell) => {
-                const width = cell.column.getSize();
-                const translateX = offset;
-                offset += width;
+              <div key={row.id} className="relative" style={{ height: ROW_HEIGHT }}>
+                {centerCells.map((cell) => {
+                  const width =
+                    columnResizePreview[cell.column.id] ?? cell.column.getSize();
+                  const translateX = offset;
+                  offset += width;
                 const cId = cell.column.id;
                 const rIdx = cell.row.index;
                     return (
@@ -795,11 +827,12 @@ function FixedRowBand({
             const cells = row.getRightVisibleCells();
             let offset = 0;
             return (
-              <div key={row.id} className="relative" style={{ height: ROW_HEIGHT }}>
-                {cells.map((cell) => {
-                  const width = cell.column.getSize();
-                  const translateX = offset;
-                  offset += width;
+                <div key={row.id} className="relative" style={{ height: ROW_HEIGHT }}>
+                  {cells.map((cell) => {
+                    const width =
+                      columnResizePreview[cell.column.id] ?? cell.column.getSize();
+                    const translateX = offset;
+                    offset += width;
                   const cId = cell.column.id;
                   const rIdx = cell.row.index;
                     return (

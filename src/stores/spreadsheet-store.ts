@@ -32,6 +32,7 @@ export const createSpreadsheetStore = (
       columnFilters: [],
       globalFilter: "",
       columnOrder: [],
+      columnResizePreview: {},
       columnPinning: { left: [], right: [] },
       columnVisibility: {},
       // Row features (Phase 3)
@@ -118,6 +119,15 @@ export const createSpreadsheetStore = (
       setColumnOrder: (order: string[]) =>
         set((state) => {
           state.columnOrder = order;
+        }),
+
+      setColumnResizePreview: (columnId: string, width: number | null) =>
+        set((state) => {
+          if (width == null) {
+            delete state.columnResizePreview[columnId];
+            return;
+          }
+          state.columnResizePreview[columnId] = width;
         }),
 
       setColumnPinning: (pinning: ColumnPinningState) =>
