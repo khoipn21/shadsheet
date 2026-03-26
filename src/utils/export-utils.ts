@@ -1,6 +1,12 @@
 import type { HyperFormula } from "hyperformula";
 import type { VisibilityState } from "@tanstack/react-table";
-import type { SpreadsheetColumnConfig } from "@/types/spreadsheet-types";
+import type { MergedCell, SpreadsheetColumnConfig } from "@/types/spreadsheet-types";
+import { getMergeLookupResult } from "@/utils/merge-cell-utils";
+
+interface MergeExportState {
+  mergedCells: MergedCell[];
+  mergedCellLookup: Map<string, number>;
+}
 
 /** Characters that trigger CSV injection — prefix with single quote */
 const CSV_INJECTION_CHARS = ["=", "+", "-", "@"];
@@ -14,17 +20,39 @@ function sanitizeCSVValue(value: string): string {
   return value;
 }
 
-/** Get visible column indices based on column configs and visibility state */
-function getVisibleColumnIndices(
+/** Resolve visible export columns, preserving current UI order when provided. */
+function getVisibleColumns(
   columns: SpreadsheetColumnConfig[],
   columnVisibility: VisibilityState,
-): number[] {
-  return columns
-    .map((_, i) => i)
-    .filter((i) => {
-      const colId = columns[i].id;
-      return columnVisibility[colId] !== false;
-    });
+  orderedVisibleColumnIds?: string[],
+): { visibleIds: string[]; visibleIndices: number[] } {
+  const indexById = new Map<string, number>();
+  columns.forEach((column, index) => {
+    indexById.set(String(column.id), index);
+  });
+
+  if (orderedVisibleColumnIds && orderedVisibleColumnIds.length > 0) {
+    const visibleIds = orderedVisibleColumnIds.filter(
+      (columnId) =>
+        columnVisibility[columnId] !== false && indexById.has(columnId),
+    );
+    return {
+      visibleIds,
+      visibleIndices: visibleIds
+        .map((columnId) => indexById.get(columnId))
+        .filter((index): index is number => index != null),
+    };
+  }
+
+  const visibleIds: string[] = [];
+  const visibleIndices: number[] = [];
+  columns.forEach((column, index) => {
+    const columnId = String(column.id);
+    if (columnVisibility[columnId] === false) return;
+    visibleIds.push(columnId);
+    visibleIndices.push(index);
+  });
+  return { visibleIds, visibleIndices };
 }
 
 /** Read all cell values from HyperFormula as a 2D string array */
@@ -32,13 +60,27 @@ function readSheetData(
   hf: HyperFormula,
   sheetId: number,
   visibleColIndices: number[],
+  mergeState?: MergeExportState,
 ): string[][] {
   const dims = hf.getSheetDimensions(sheetId);
   const rows: string[][] = [];
 
   for (let r = 0; r < dims.height; r++) {
     const row: string[] = [];
-    for (const c of visibleColIndices) {
+    for (let visibleCol = 0; visibleCol < visibleColIndices.length; visibleCol++) {
+      const c = visibleColIndices[visibleCol];
+      const merge = mergeState
+        ? getMergeLookupResult(
+            mergeState.mergedCells,
+            mergeState.mergedCellLookup,
+            r,
+            visibleCol,
+          )
+        : null;
+      if (merge && !merge.isAnchor) {
+        row.push("");
+        continue;
+      }
       const val = hf.getCellValue({ sheet: sheetId, row: r, col: c });
       if (val === null || val === undefined) {
         row.push("");
@@ -76,10 +118,16 @@ export function exportToCSV(
   columns: SpreadsheetColumnConfig[],
   columnVisibility: VisibilityState,
   filename = "export.csv",
+  mergeState?: MergeExportState,
+  orderedVisibleColumnIds?: string[],
 ) {
-  const visibleIndices = getVisibleColumnIndices(columns, columnVisibility);
+  const { visibleIndices } = getVisibleColumns(
+    columns,
+    columnVisibility,
+    orderedVisibleColumnIds,
+  );
   const headers = visibleIndices.map((i) => columns[i].header);
-  const data = readSheetData(hf, sheetId, visibleIndices);
+  const data = readSheetData(hf, sheetId, visibleIndices, mergeState);
 
   const csvRows = [headers, ...data].map((row) =>
     row
@@ -109,12 +157,18 @@ export async function exportToXLSX(
   columns: SpreadsheetColumnConfig[],
   columnVisibility: VisibilityState,
   filename = "export.xlsx",
+  mergeState?: MergeExportState,
+  orderedVisibleColumnIds?: string[],
 ) {
   const XLSX = await import("xlsx");
 
-  const visibleIndices = getVisibleColumnIndices(columns, columnVisibility);
+  const { visibleIndices } = getVisibleColumns(
+    columns,
+    columnVisibility,
+    orderedVisibleColumnIds,
+  );
   const headers = visibleIndices.map((i) => columns[i].header);
-  const data = readSheetData(hf, sheetId, visibleIndices);
+  const data = readSheetData(hf, sheetId, visibleIndices, mergeState);
 
   // Build worksheet with headers
   const wsData = [headers, ...data];
@@ -124,6 +178,16 @@ export async function exportToXLSX(
   const dims = hf.getSheetDimensions(sheetId);
   for (let r = 0; r < dims.height; r++) {
     for (let ci = 0; ci < visibleIndices.length; ci++) {
+      const merge = mergeState
+        ? getMergeLookupResult(
+            mergeState.mergedCells,
+            mergeState.mergedCellLookup,
+            r,
+            ci,
+          )
+        : null;
+      if (merge && !merge.isAnchor) continue;
+
       const c = visibleIndices[ci];
       const val = hf.getCellValue({ sheet: sheetId, row: r, col: c });
       if (typeof val === "number") {
@@ -133,6 +197,33 @@ export async function exportToXLSX(
           ws[cellRef].v = val;
         }
       }
+    }
+  }
+
+  if (mergeState && mergeState.mergedCells.length > 0) {
+    const maxVisibleCol = visibleIndices.length - 1;
+    const maxDataRow = dims.height - 1;
+    const exportMerges = mergeState.mergedCells
+      .map((merge) => ({
+        startRow: merge.row,
+        endRow: merge.row + merge.rowSpan - 1,
+        startCol: merge.col,
+        endCol: merge.col + merge.colSpan - 1,
+      }))
+      .filter(
+        (merge) =>
+          merge.startRow >= 0 &&
+          merge.endRow <= maxDataRow &&
+          merge.startCol >= 0 &&
+          merge.endCol <= maxVisibleCol,
+      )
+      .map((merge) => ({
+        s: { r: merge.startRow + 1, c: merge.startCol },
+        e: { r: merge.endRow + 1, c: merge.endCol },
+      }));
+
+    if (exportMerges.length > 0) {
+      ws["!merges"] = exportMerges;
     }
   }
 

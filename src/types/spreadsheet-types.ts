@@ -51,6 +51,30 @@ export interface SelectionRange {
   end: CellAddress;
 }
 
+/** A merged cell region. Anchor = upper-left corner. */
+export interface MergedCell {
+  /** Top-left row index (0-based). */
+  row: number;
+  /** Top-left visible-column index (0-based). */
+  col: number;
+  /** Number of rows spanned (>=1). */
+  rowSpan: number;
+  /** Number of columns spanned (>=1). */
+  colSpan: number;
+}
+
+/** Snapshot pair for merge topology undo/redo. */
+export interface MergeHistoryEntry {
+  before: MergedCell[];
+  after: MergedCell[];
+}
+
+/** Result of looking up a cell in the merge map. */
+export interface MergeLookupResult {
+  merge: MergedCell;
+  isAnchor: boolean;
+}
+
 /** Clipboard marquee state for copied/cut ranges. */
 export type ClipboardSelectionMode = "copy" | "cut";
 
@@ -173,6 +197,7 @@ export interface SpreadsheetFeatureFlags {
   editable: boolean;
   resizableColumns: boolean;
   formulasEnabled: boolean;
+  mergeVirtualized: boolean;
   onBeforeCellEdit?: (
     cell: CellAddress,
     rowData: SpreadsheetRowData,
@@ -235,6 +260,7 @@ export interface SpreadsheetProps<
   defaultColumnWidth?: number;
   exportFileName?: string;
   grouping?: string[];
+  mergeVirtualized?: boolean;
   className?: string;
   theme?: "light" | "dark";
 }
@@ -266,6 +292,10 @@ export interface SpreadsheetUIState {
   renderTrigger: number;
   cellFormats: Record<string, CellFormat>;
   contextMenu: ContextMenuState | null;
+  mergedCells: MergedCell[];
+  mergedCellLookup: Map<string, number>;
+  mergeUndoStack: MergeHistoryEntry[];
+  mergeRedoStack: MergeHistoryEntry[];
 }
 
 /** Actions for the Zustand store. */
@@ -312,6 +342,22 @@ export interface SpreadsheetUIActions {
   setContextMenu: (menu: ContextMenuState | null) => void;
   shiftCellFormatKeys: (rowIndex: number, direction: "up" | "down") => void;
   removeCellFormatRow: (rowIndex: number) => void;
+  mergeCells: (range: SelectionRange, visibleColumnIds: string[]) => void;
+  unmergeCells: (row: number, col: number) => void;
+  recordMergeHistory: (before: MergedCell[]) => void;
+  undoMergeHistory: () => void;
+  redoMergeHistory: () => void;
+    clearMergedCells: () => void;
+    reindexMergedCells: (
+      previousVisibleColumnIds: string[],
+      nextVisibleColumnIds: string[],
+    ) => void;
+    getMergeLookup: (row: number, col: number) => MergeLookupResult | null;
+  shiftMergedCells: (
+    type: "row" | "col",
+    index: number,
+    direction: "insert" | "delete",
+  ) => void;
 }
 
 export type SpreadsheetStore = SpreadsheetUIState & SpreadsheetUIActions;
@@ -320,5 +366,6 @@ export type SpreadsheetStore = SpreadsheetUIState & SpreadsheetUIActions;
 export interface SpreadsheetTableMeta {
   updateData: (rowIndex: number, columnId: string, value: CellValue) => boolean;
   getColumnConfig: (columnId: string) => SpreadsheetColumnConfig | undefined;
+  syncFromFormulaEngine?: () => void;
   featureFlags: SpreadsheetFeatureFlags;
 }

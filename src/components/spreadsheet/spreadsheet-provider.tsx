@@ -56,6 +56,7 @@ interface SpreadsheetProviderProps<TData extends SpreadsheetRowData> {
     oldValue: CellValue,
     newValue: CellValue,
   ) => void | boolean;
+  onFormulaSyncRequest?: () => void;
   featureFlags?: SpreadsheetFeatureFlags;
   initialColumnPinning?: { left?: string[]; right?: string[] };
   initialGrouping?: string[];
@@ -68,6 +69,7 @@ const DEFAULT_FEATURE_FLAGS: SpreadsheetFeatureFlags = {
   editable: true,
   resizableColumns: true,
   formulasEnabled: true,
+  mergeVirtualized: false,
 };
 
 export function SpreadsheetProvider<TData extends SpreadsheetRowData>({
@@ -77,6 +79,7 @@ export function SpreadsheetProvider<TData extends SpreadsheetRowData>({
   getRowId,
   getSubRows,
   onDataChange,
+  onFormulaSyncRequest,
   featureFlags = DEFAULT_FEATURE_FLAGS,
   initialColumnPinning,
   initialGrouping = [],
@@ -142,8 +145,9 @@ export function SpreadsheetProvider<TData extends SpreadsheetRowData>({
           columnConfigs={columnConfigs}
           getRowId={getRowId}
           getSubRows={getSubRows}
-          onDataChange={onDataChange}
-          featureFlags={featureFlags}
+            onDataChange={onDataChange}
+            onFormulaSyncRequest={onFormulaSyncRequest}
+            featureFlags={featureFlags}
           rowSelectionEnabled={rowSelectionEnabled}
           rowSelectionMode={rowSelectionMode}
         >
@@ -162,6 +166,7 @@ function TableProvider<TData extends SpreadsheetRowData>({
   getRowId,
   getSubRows,
   onDataChange,
+  onFormulaSyncRequest,
   featureFlags,
   rowSelectionEnabled,
   rowSelectionMode,
@@ -178,6 +183,7 @@ function TableProvider<TData extends SpreadsheetRowData>({
     oldValue: CellValue,
     newValue: CellValue,
   ) => void | boolean;
+  onFormulaSyncRequest?: () => void;
   featureFlags: SpreadsheetFeatureFlags;
   rowSelectionEnabled: boolean;
   rowSelectionMode: RowSelectionMode;
@@ -225,12 +231,13 @@ function TableProvider<TData extends SpreadsheetRowData>({
         const oldValue = (row?.[columnId] ?? null) as CellValue;
         return onDataChange?.(rowIndex, columnId, oldValue, value) !== false;
       },
-      getColumnConfig: (columnId) =>
-        getColumnConfig(columnId) as SpreadsheetColumnConfig | undefined,
-      featureFlags,
-    }),
-    [data, featureFlags, getColumnConfig, onDataChange],
-  );
+        getColumnConfig: (columnId) =>
+          getColumnConfig(columnId) as SpreadsheetColumnConfig | undefined,
+        syncFromFormulaEngine: onFormulaSyncRequest,
+        featureFlags,
+      }),
+      [data, featureFlags, getColumnConfig, onDataChange, onFormulaSyncRequest],
+    );
 
   const table = useReactTable({
     data,

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { immer } from "zustand/middleware/immer";
+import { enableMapSet } from "immer";
 import type {
   SpreadsheetStore,
   SpreadsheetColumnConfig,
@@ -12,14 +13,118 @@ import type {
   RowSelectionMode,
   ContextMenuState,
   TextAlignment,
+  MergedCell,
+  MergeHistoryEntry,
 } from "@/types/spreadsheet-types";
 import type { SortingState, ColumnFiltersState, ColumnPinningState, VisibilityState, RowSelectionState, ExpandedState, GroupingState } from "@tanstack/react-table";
+import {
+  buildMergeLookup,
+  findOverlappingMerges,
+  getMergeLookupResult,
+  mergesOverlap,
+  selectionToMergeRegion,
+} from "@/utils/merge-cell-utils";
+
+// Enable Immer's Map/Set support for mergedCellLookup state
+enableMapSet();
+
+function shiftMergeRegion(
+  merge: MergedCell,
+  type: "row" | "col",
+  index: number,
+  direction: "insert" | "delete",
+): MergedCell | null {
+  const next: MergedCell = { ...merge };
+  const start = type === "row" ? merge.row : merge.col;
+  const span = type === "row" ? merge.rowSpan : merge.colSpan;
+  const end = start + span - 1;
+
+  if (direction === "insert") {
+    if (index <= start) {
+      if (type === "row") next.row += 1;
+      else next.col += 1;
+      return next;
+    }
+    if (index <= end) {
+      if (type === "row") next.rowSpan += 1;
+      else next.colSpan += 1;
+    }
+    return next;
+  }
+
+  if (index < start) {
+    if (type === "row") next.row -= 1;
+    else next.col -= 1;
+    return next;
+  }
+  if (index > end) {
+    return next;
+  }
+
+  if (type === "row") {
+    next.rowSpan -= 1;
+    return next.rowSpan > 0 ? next : null;
+  }
+  next.colSpan -= 1;
+  return next.colSpan > 0 ? next : null;
+}
+
+function remapMergeRegionColumns(
+  merge: MergedCell,
+  previousVisibleColumnIds: string[],
+  nextColumnIndexById: Map<string, number>,
+): MergedCell | null {
+  const previousIds = previousVisibleColumnIds.slice(
+    merge.col,
+    merge.col + merge.colSpan,
+  );
+  if (previousIds.length !== merge.colSpan) return null;
+
+  const remappedIndices = previousIds
+    .map((columnId) => nextColumnIndexById.get(columnId))
+    .filter((value): value is number => value != null)
+    .sort((a, b) => a - b);
+
+  if (remappedIndices.length !== previousIds.length) return null;
+
+  const startCol = remappedIndices[0];
+  const endCol = remappedIndices[remappedIndices.length - 1];
+  const contiguous = endCol - startCol + 1 === remappedIndices.length;
+  if (!contiguous) return null;
+
+  return {
+    ...merge,
+    col: startCol,
+    colSpan: remappedIndices.length,
+  };
+}
+
+function cloneMergedCells(merges: MergedCell[]): MergedCell[] {
+  return merges.map((merge) => ({ ...merge }));
+}
+
+function areMergedCellsEqual(a: MergedCell[], b: MergedCell[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let index = 0; index < a.length; index++) {
+    const left = a[index];
+    const right = b[index];
+    if (
+      left.row !== right.row ||
+      left.col !== right.col ||
+      left.rowSpan !== right.rowSpan ||
+      left.colSpan !== right.colSpan
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
 
 export const createSpreadsheetStore = (
   initialColumns: SpreadsheetColumnConfig[] = [],
 ) =>
   create<SpreadsheetStore>()(
-    immer((set) => ({
+    immer((set, get) => ({
       // State
       columns: initialColumns,
         activeCell: null,
@@ -49,6 +154,10 @@ export const createSpreadsheetStore = (
       // Polish (Phase 7)
       cellFormats: {} as Record<string, CellFormat>,
       contextMenu: null as ContextMenuState | null,
+      mergedCells: [] as MergedCell[],
+      mergedCellLookup: new Map<string, number>(),
+      mergeUndoStack: [] as MergeHistoryEntry[],
+      mergeRedoStack: [] as MergeHistoryEntry[],
 
       // Actions
       setActiveCell: (cell: CellAddress | null) =>
@@ -328,6 +437,136 @@ export const createSpreadsheetStore = (
             }
           }
           state.cellFormats = newFormats;
+        }),
+
+      mergeCells: (range: SelectionRange, visibleColumnIds: string[]) =>
+        set((state) => {
+          const nextMerge = selectionToMergeRegion(range, visibleColumnIds);
+          if (!nextMerge) return;
+          if (nextMerge.rowSpan * nextMerge.colSpan < 2) return;
+
+          const overlapping = findOverlappingMerges(state.mergedCells, nextMerge);
+          const overlapSet = new Set(overlapping);
+          const withoutOverlaps = state.mergedCells.filter(
+            (_, index) => !overlapSet.has(index),
+          );
+          withoutOverlaps.push(nextMerge);
+
+          state.mergedCells = withoutOverlaps;
+          state.mergedCellLookup = buildMergeLookup(withoutOverlaps);
+        }),
+
+      unmergeCells: (row: number, col: number) =>
+        set((state) => {
+          const mergeIndex = state.mergedCellLookup.get(`${row}-${col}`);
+          if (mergeIndex == null) return;
+
+          const nextMerges = state.mergedCells.filter(
+            (_, index) => index !== mergeIndex,
+          );
+          state.mergedCells = nextMerges;
+          state.mergedCellLookup = buildMergeLookup(nextMerges);
+        }),
+
+      recordMergeHistory: (before: MergedCell[]) =>
+        set((state) => {
+          const beforeSnapshot = cloneMergedCells(before);
+          const afterSnapshot = cloneMergedCells(state.mergedCells);
+          if (areMergedCellsEqual(beforeSnapshot, afterSnapshot)) return;
+          state.mergeUndoStack.push({
+            before: beforeSnapshot,
+            after: afterSnapshot,
+          });
+          state.mergeRedoStack = [];
+        }),
+
+      undoMergeHistory: () =>
+        set((state) => {
+          const entry = state.mergeUndoStack.pop();
+          if (!entry) return;
+          state.mergedCells = cloneMergedCells(entry.before);
+          state.mergedCellLookup = buildMergeLookup(state.mergedCells);
+          state.mergeRedoStack.push(entry);
+        }),
+
+      redoMergeHistory: () =>
+        set((state) => {
+          const entry = state.mergeRedoStack.pop();
+          if (!entry) return;
+          state.mergedCells = cloneMergedCells(entry.after);
+          state.mergedCellLookup = buildMergeLookup(state.mergedCells);
+          state.mergeUndoStack.push(entry);
+        }),
+
+      clearMergedCells: () =>
+        set((state) => {
+          state.mergedCells = [];
+          state.mergedCellLookup = new Map<string, number>();
+          state.mergeUndoStack = [];
+          state.mergeRedoStack = [];
+        }),
+
+      reindexMergedCells: (
+        previousVisibleColumnIds: string[],
+        nextVisibleColumnIds: string[],
+      ) =>
+        set((state) => {
+          if (state.mergedCells.length === 0) return;
+          if (
+            previousVisibleColumnIds.length === 0 ||
+            nextVisibleColumnIds.length === 0
+          ) {
+            state.mergedCells = [];
+            state.mergedCellLookup = new Map<string, number>();
+            return;
+          }
+
+          const nextColumnIndexById = new Map<string, number>();
+          nextVisibleColumnIds.forEach((columnId, index) => {
+            if (!nextColumnIndexById.has(columnId)) {
+              nextColumnIndexById.set(columnId, index);
+            }
+          });
+
+          const remapped: MergedCell[] = [];
+          for (const merge of state.mergedCells) {
+            const candidate = remapMergeRegionColumns(
+              merge,
+              previousVisibleColumnIds,
+              nextColumnIndexById,
+            );
+            if (!candidate) continue;
+            if (remapped.some((existing) => mergesOverlap(existing, candidate))) {
+              continue;
+            }
+            remapped.push(candidate);
+          }
+
+          state.mergedCells = remapped;
+          state.mergedCellLookup = buildMergeLookup(remapped);
+        }),
+
+      getMergeLookup: (row: number, col: number) => {
+        const state = get();
+        return getMergeLookupResult(
+          state.mergedCells,
+          state.mergedCellLookup,
+          row,
+          col,
+        );
+      },
+
+      shiftMergedCells: (
+        type: "row" | "col",
+        index: number,
+        direction: "insert" | "delete",
+      ) =>
+        set((state) => {
+          const shifted = state.mergedCells
+            .map((merge) => shiftMergeRegion(merge, type, index, direction))
+            .filter((merge): merge is MergedCell => merge !== null);
+          state.mergedCells = shifted;
+          state.mergedCellLookup = buildMergeLookup(shifted);
         }),
     })),
   );

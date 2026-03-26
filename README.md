@@ -1,6 +1,6 @@
 # Spreadsheet
 
-Reusable React spreadsheet grid built with TanStack Table, TanStack Virtual, Zustand, and HyperFormula.
+Reusable React spreadsheet component library built with React 19, TanStack Table, TanStack Virtual, Zustand, and HyperFormula.
 
 ## Install
 
@@ -8,11 +8,17 @@ Reusable React spreadsheet grid built with TanStack Table, TanStack Virtual, Zus
 npm install spreadsheet react react-dom
 ```
 
-Import the bundled styles once:
+Import the bundled stylesheet once in your app entry:
 
-```typescript
+```ts
 import "spreadsheet/style.css";
 ```
+
+## Requirements
+
+- React 19+
+- Browser or client-rendered React environment
+- A parent container with an explicit height because `Spreadsheet` defaults to `height="100%"`
 
 ## Quick Start
 
@@ -26,9 +32,9 @@ type Row = {
 };
 
 const columns: ColumnConfig<Row>[] = [
-  { id: "A", header: "Name", editable: true, sortable: true },
-  { id: "B", header: "Amount", type: "number", editable: true },
-  { id: "C", header: "Active", type: "checkbox" },
+  { id: "A", header: "Name", editable: true, sortable: true, width: 180 },
+  { id: "B", header: "Amount", type: "number", editable: true, width: 140 },
+  { id: "C", header: "Active", type: "checkbox", editable: true, width: 120 },
 ];
 
 const data: Row[] = [
@@ -52,15 +58,116 @@ export function Example() {
 }
 ```
 
-## Public API
+## What It Includes
 
-- `Spreadsheet` exposes a single top-level component with toolbar, formula bar, search, grid, status bar, and export controls.
-- `SpreadsheetRef` supports `focus`, `scrollToCell`, `getSelectedData`, `getData`, `setData`, `exportToCSV`, `exportToXLSX`, `undo`, and `redo`.
-- Callback props: `onCellChange`, `onSelectionChange`, `onSort`, `onFilter`, `onExport`.
-- Each column menu includes freeform Excel-style filtering: plain column search plus expression filters such as `>100 && <500`, `contains(alpha)`, `blank()`, `in(open,closed)`, or `regex(^A)`.
+- Virtualized row rendering and virtualized center columns for large datasets
+- Left and right pinned column panes
+- Column sorting, hiding, pinning, resize handles, and auto-fit
+- Global search plus per-column filter panels with expression filters
+- Inline cell editors for text, number, date, select, and checkbox columns
+- Formula bar backed by HyperFormula
+- Range selection, keyboard navigation, clipboard copy/cut/paste, and status bar aggregates
+- Toolbar formatting controls and CSV/XLSX export
+- Tree rows, grouping, row selection, and light or dark theme support
+
+## Public Component Surface
+
+`Spreadsheet` is the package entry point.
+
+Key props:
+
+- `data`, `columns`
+- `getRowId`, `getSubRows`
+- `sortable`, `filterable`, `editable`, `resizableColumns`, `formulasEnabled`
+- `showToolbar`, `showFormulaBar`, `globalSearchable`
+- `rowSelection`
+- `pinnedColumns`, `grouping`
+- `height`, `defaultColumnWidth`, `exportFileName`, `theme`, `className`
+
+Column config supports:
+
+- `id`, `header`, `width`, `minWidth`, `maxWidth`
+- `sortable`, `filterable`, `pinned`
+- `type` of `text | number | date | select | checkbox`
+- `editable` as `boolean` or row predicate
+- `validation` via Zod schema
+- `options` for select columns
+
+## Callbacks
+
+- `onSelectionChange(selection)`
+- `onCellChange(change)`
+- `onBeforeCellEdit(cell, row)`
+- `onSort(sorting)`
+- `onFilter(filters)`
+- `onExport(format)`
+
+Behavior notes:
+
+- `onCellChange` can veto an edit by returning `false`.
+- `onBeforeCellEdit` can block entry into edit mode for a specific cell.
+- `onFilter` returns both global search and per-column filter state.
+
+## Ref API
+
+`SpreadsheetRef` exposes:
+
+- `focus()`
+- `scrollToCell(rowIndex, columnIndexOrId)`
+- `getSelectedData()`
+- `getData()`
+- `setData(data)`
+- `exportToCSV()`
+- `exportToXLSX()`
+- `undo()`
+- `redo()`
+
+`exportToXLSX()` is async.
+
+## Filter Expressions
+
+Each column menu supports plain search and an expression mode. Examples:
+
+- `>100 && <500`
+- `contains(alpha)`
+- `blank()`
+- `in(open,closed)`
+- `regex(^A)`
+- `between(2026-01-01, 2026-12-31)`
+
+Supported operators and helpers include `=`, `!=`, `>`, `>=`, `<`, `<=`, `&&`, `||`, `not`, `contains`, `startsWith`, `endsWith`, `between`, `in`, `blank`, and `regex`.
 
 ## Storybook
+
+Storybook stories cover:
+
+- default grid
+- read-only mode
+- large dataset virtualization
+- formulas
+- pinned columns
+- tree rows
+- dark theme
+
+Run locally with:
 
 ```bash
 npm run storybook
 ```
+
+## Scripts
+
+```bash
+npm run dev
+npm run build
+npm run lint
+npm run preview
+npm run storybook
+npm run build-storybook
+```
+
+## Current Notes
+
+- This package is browser-oriented. Clipboard, download, and DOM APIs are used directly.
+- Build and Storybook are configured. A dedicated automated test runner is not configured in `package.json` yet.
+- The docs only guarantee the features described here. Partially wired behavior in the codebase, such as structural row or column commands and auto-fill, is intentionally not advertised as stable package contract yet.

@@ -7,6 +7,8 @@ export type {
   CellValue,
   ColumnConfig,
   ConditionalFormatRule,
+  MergedCell,
+  MergeLookupResult,
   SpreadsheetCellChange,
   SpreadsheetColumnFilterValue,
   SpreadsheetColumnConfig,

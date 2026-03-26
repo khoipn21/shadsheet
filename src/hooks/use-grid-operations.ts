@@ -13,6 +13,7 @@ export function useGridOperations() {
   const setColumns = useSpreadsheetStore((s) => s.setColumns);
   const shiftCellFormatKeys = useSpreadsheetStore((s) => s.shiftCellFormatKeys);
   const removeCellFormatRow = useSpreadsheetStore((s) => s.removeCellFormatRow);
+  const shiftMergedCells = useSpreadsheetStore((s) => s.shiftMergedCells);
 
   const insertRow = useCallback(
     (rowIndex: number, position: "above" | "below") => {
@@ -21,9 +22,10 @@ export function useGridOperations() {
       hf.addRows(0, [targetRow, 1]);
       // Shift cell format keys for rows >= targetRow
       shiftCellFormatKeys(targetRow, "up");
+      shiftMergedCells("row", targetRow, "insert");
       incrementRenderTrigger();
     },
-    [hf, incrementRenderTrigger, shiftCellFormatKeys],
+    [hf, incrementRenderTrigger, shiftCellFormatKeys, shiftMergedCells],
   );
 
   const deleteRow = useCallback(
@@ -32,9 +34,10 @@ export function useGridOperations() {
       hf.removeRows(0, [rowIndex, 1]);
       // Remove deleted row's formats and shift remaining keys down
       removeCellFormatRow(rowIndex);
+      shiftMergedCells("row", rowIndex, "delete");
       incrementRenderTrigger();
     },
-    [hf, incrementRenderTrigger, removeCellFormatRow],
+    [hf, incrementRenderTrigger, removeCellFormatRow, shiftMergedCells],
   );
 
   const insertColumn = useCallback(
@@ -52,9 +55,10 @@ export function useGridOperations() {
       const updated = [...columns];
       updated.splice(targetCol, 0, newCol);
       setColumns(updated);
+      shiftMergedCells("col", targetCol, "insert");
       incrementRenderTrigger();
     },
-    [hf, columns, setColumns, incrementRenderTrigger],
+    [hf, columns, setColumns, incrementRenderTrigger, shiftMergedCells],
   );
 
   const deleteColumn = useCallback(
@@ -64,9 +68,10 @@ export function useGridOperations() {
       // Remove from column configs
       const updated = columns.filter((_, i) => i !== colIndex);
       setColumns(updated);
+      shiftMergedCells("col", colIndex, "delete");
       incrementRenderTrigger();
     },
-    [hf, columns, setColumns, incrementRenderTrigger],
+    [hf, columns, setColumns, incrementRenderTrigger, shiftMergedCells],
   );
 
   return { insertRow, deleteRow, insertColumn, deleteColumn };

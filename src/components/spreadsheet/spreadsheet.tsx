@@ -26,7 +26,11 @@ import {
   spreadsheetColumnFilterFn,
 } from "@/utils/column-filter-utils";
 import { exportToCSV, exportToXLSX } from "@/utils/export-utils";
-import { readSheetRows, replaceSheetData } from "@/utils/formula-utils";
+import {
+  didUndoRedoTouchMergeHistoryMarker,
+  readSheetRows,
+  replaceSheetData,
+} from "@/utils/formula-utils";
 import type {
   CellValue,
   SpreadsheetColumnConfig,
@@ -132,6 +136,7 @@ function SpreadsheetInner<TData extends SpreadsheetRowData>(
     defaultColumnWidth = 120,
     exportFileName,
     grouping,
+    mergeVirtualized = false,
     className,
     theme = "light",
   }: SpreadsheetProps<TData>,
@@ -217,29 +222,43 @@ function SpreadsheetInner<TData extends SpreadsheetRowData>(
   );
 
   const runExport = useCallback(
-    async (format: SpreadsheetExportFormat) => {
-      if (!hfRef.current || !storeRef.current) return;
-      const visibility = storeRef.current.getState().columnVisibility;
-      const filename = getExportFileName(exportFileName, format);
-      if (format === "csv") {
+      async (format: SpreadsheetExportFormat) => {
+        if (!hfRef.current || !storeRef.current) return;
+        const storeState = storeRef.current.getState();
+        const visibility = storeState.columnVisibility;
+        const filename = getExportFileName(exportFileName, format);
+        const orderedVisibleColumnIds =
+          tableRef.current
+            ?.getVisibleLeafColumns()
+            .map((column) => column.id)
+            .filter((id) => id !== "_row_number") ?? [];
+        const mergeState = {
+          mergedCells: storeState.mergedCells,
+          mergedCellLookup: storeState.mergedCellLookup,
+        };
+        if (format === "csv") {
         exportToCSV(
           hfRef.current,
           0,
           resolvedColumns as SpreadsheetColumnConfig[],
-          visibility,
-          filename,
-        );
-      } else {
-        await exportToXLSX(
-          hfRef.current,
-          0,
+            visibility,
+            filename,
+            mergeState,
+            orderedVisibleColumnIds,
+          );
+        } else {
+          await exportToXLSX(
+            hfRef.current,
+            0,
           resolvedColumns as SpreadsheetColumnConfig[],
-          visibility,
-          filename,
-        );
-      }
-      onExport?.(format);
-    },
+            visibility,
+            filename,
+            mergeState,
+            orderedVisibleColumnIds,
+          );
+        }
+        onExport?.(format);
+      },
     [exportFileName, onExport, resolvedColumns],
   );
 
@@ -282,15 +301,29 @@ function SpreadsheetInner<TData extends SpreadsheetRowData>(
     exportToXLSX: () => runExport("xlsx"),
     undo: () => {
       if (!hfRef.current?.isThereSomethingToUndo()) return;
-      hfRef.current.undo();
-      storeRef.current?.getState().incrementRenderTrigger();
-      syncFromFormulaEngine();
+      try {
+        const changes = hfRef.current.undo();
+        if (didUndoRedoTouchMergeHistoryMarker(hfRef.current, changes)) {
+          storeRef.current?.getState().undoMergeHistory?.();
+        }
+        storeRef.current?.getState().incrementRenderTrigger();
+        syncFromFormulaEngine();
+      } catch (error) {
+        console.error("Undo failed:", error);
+      }
     },
     redo: () => {
       if (!hfRef.current?.isThereSomethingToRedo()) return;
-      hfRef.current.redo();
-      storeRef.current?.getState().incrementRenderTrigger();
-      syncFromFormulaEngine();
+      try {
+        const changes = hfRef.current.redo();
+        if (didUndoRedoTouchMergeHistoryMarker(hfRef.current, changes)) {
+          storeRef.current?.getState().redoMergeHistory?.();
+        }
+        storeRef.current?.getState().incrementRenderTrigger();
+        syncFromFormulaEngine();
+      } catch (error) {
+        console.error("Redo failed:", error);
+      }
     },
   }), [internalData, resolvedColumns, runExport, syncFromFormulaEngine]);
 
@@ -301,12 +334,14 @@ function SpreadsheetInner<TData extends SpreadsheetRowData>(
         columns={tableColumns}
         columnConfigs={resolvedColumns as SpreadsheetColumnConfig<TData>[]}
         getRowId={getRowId}
-        getSubRows={getSubRows}
-        onDataChange={handleDataChange}
-        featureFlags={{
+          getSubRows={getSubRows}
+          onDataChange={handleDataChange}
+          onFormulaSyncRequest={syncFromFormulaEngine}
+          featureFlags={{
           editable,
           resizableColumns,
           formulasEnabled,
+          mergeVirtualized,
           onBeforeCellEdit: onBeforeCellEdit
             ? (cell, rowData) => onBeforeCellEdit(cell, rowData as TData)
             : undefined,

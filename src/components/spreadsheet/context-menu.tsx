@@ -4,6 +4,7 @@ import {
   Scissors,
   Copy,
   ClipboardPaste,
+  Combine,
   Plus,
   Trash2,
   ArrowUpAZ,
@@ -12,10 +13,13 @@ import {
 import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import { useHyperFormula } from "@/hooks/use-hyperformula";
 import { useClipboard } from "@/hooks/use-clipboard";
+import { useMergeCells } from "@/hooks/use-merge-cells";
 import type { CellValue, SpreadsheetTableMeta } from "@/types/spreadsheet-types";
 
 interface ContextMenuProps {
   visibleColumnIds: string[];
+  leftPinnedCount: number;
+  centerCount: number;
   totalRowCount: number;
   meta?: SpreadsheetTableMeta;
   getCellValue: (rowIndex: number, columnId: string) => CellValue;
@@ -29,6 +33,8 @@ interface ContextMenuProps {
 
 export function ContextMenu({
   visibleColumnIds,
+  leftPinnedCount,
+  centerCount,
   totalRowCount,
   meta,
   getCellValue,
@@ -46,6 +52,19 @@ export function ContextMenu({
   const hf = useHyperFormula();
   const incrementRenderTrigger = useSpreadsheetStore((s) => s.incrementRenderTrigger);
   const menuRef = useRef<HTMLDivElement>(null);
+  const {
+    toggleMerge,
+    unmerge,
+    canMergeSelection,
+    isSelectionExactlyMerged,
+    getMergedCellAt,
+  } = useMergeCells({
+    visibleColumnIds,
+    leftPinnedCount,
+    centerCount,
+    onClearCellValue: (rowIndex, columnId, value) =>
+      meta?.updateData(rowIndex, columnId, value) !== false,
+  });
 
   const { handleCopy, handleCut, handlePaste } = useClipboard({
     activeCell,
@@ -86,6 +105,11 @@ export function ContextMenu({
 
   const { x, y, cell } = contextMenu;
   const colIdx = visibleColumnIds.indexOf(cell.columnId);
+  const clickedMerge =
+    colIdx !== -1 ? getMergedCellAt(cell.rowIndex, colIdx) : null;
+  const mergeAtContext = clickedMerge;
+  const showUnmerge = Boolean(mergeAtContext);
+  const showMerge = !showUnmerge && canMergeSelection && !isSelectionExactlyMerged(selectionRange);
 
   // Clamp menu to viewport
   const menuWidth = 220;
@@ -121,6 +145,18 @@ export function ContextMenu({
       {menuItem("Cut", <Scissors className="w-3.5 h-3.5" />, handleCut, "Ctrl+X")}
       {menuItem("Copy", <Copy className="w-3.5 h-3.5" />, handleCopy, "Ctrl+C")}
       {menuItem("Paste", <ClipboardPaste className="w-3.5 h-3.5" />, handlePaste, "Ctrl+V")}
+      {(showMerge || showUnmerge) && separator}
+      {showMerge &&
+        menuItem("Merge Cells", <Combine className="w-3.5 h-3.5" />, () => {
+          toggleMerge(selectionRange);
+        }, "Ctrl+M")}
+      {showUnmerge &&
+        menuItem("Unmerge Cells", <Combine className="w-3.5 h-3.5" />, () => {
+          const merge = mergeAtContext?.merge;
+          if (merge) {
+            unmerge(merge.row, merge.col);
+          }
+        }, "Ctrl+M")}
       {separator}
       {menuItem("Insert Row Above", <Plus className="w-3.5 h-3.5" />, () => onInsertRow?.(cell.rowIndex, "above"))}
       {menuItem("Insert Row Below", <Plus className="w-3.5 h-3.5" />, () => onInsertRow?.(cell.rowIndex, "below"))}

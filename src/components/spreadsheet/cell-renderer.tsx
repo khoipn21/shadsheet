@@ -29,6 +29,13 @@ interface CellRendererProps {
   width: number;
   height: number;
   translateX: number;
+  mergeSpan?: {
+    rowSpan: number;
+    colSpan: number;
+    totalWidth: number;
+    totalHeight: number;
+  } | null;
+  isMergeCovered?: boolean;
   isActive?: boolean;
   isSelected?: boolean;
   rowSelected?: boolean;
@@ -123,6 +130,8 @@ export const CellRenderer = memo(function CellRenderer({
   width,
   height,
   translateX,
+  mergeSpan = null,
+  isMergeCovered = false,
   isActive = false,
   isSelected = false,
   rowSelected,
@@ -141,6 +150,9 @@ export const CellRenderer = memo(function CellRenderer({
   const columnId = cell.column.id;
   const rowIndex = cell.row.index;
   const isRowNumberCol = columnId === "_row_number";
+  const renderWidth = mergeSpan?.totalWidth ?? width;
+  const renderHeight = mergeSpan?.totalHeight ?? height;
+  const isMergeAnchor = Boolean(mergeSpan);
 
   // HyperFormula integration — read values from HF when available
   const hf = useHyperFormula();
@@ -324,6 +336,8 @@ export const CellRenderer = memo(function CellRenderer({
   const isAggregated = cell.getIsAggregated();
   const hasError = isEditing && validationError;
 
+  if (isMergeCovered) return null;
+
   if (isEditing && columnConfig) {
     // When editing, show raw formula from HF (e.g. "=SUM(A1:A10)") rather than computed value
     const rawValue = hf && !isRowNumberCol ? getCellRawValue(hf, rowIndex, hfCol) : value;
@@ -334,8 +348,8 @@ export const CellRenderer = memo(function CellRenderer({
         data-col-id={columnId}
         className="absolute top-0 left-0"
         style={{
-          width,
-          height,
+          width: renderWidth,
+          height: renderHeight,
           transform: `translateX(${translateX}px)`,
         }}
         onKeyDownCapture={handleEditorKeyCapture}
@@ -391,6 +405,7 @@ export const CellRenderer = memo(function CellRenderer({
   const showActiveRing = isActive && !isRowNumberCol && !selectionOutline;
   const selectionClasses = [
     showActiveRing ? "ring-2 ring-primary ring-inset z-[5]" : "",
+    isMergeAnchor ? "z-[2]" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -407,8 +422,8 @@ export const CellRenderer = memo(function CellRenderer({
         editable && !isRowNumberCol ? "cursor-cell" : ""
       } ${hasFormulaError ? "text-destructive" : ""} ${selectionClasses}`}
         style={{
-          width,
-          height,
+          width: renderWidth,
+          height: renderHeight,
         transform: `translateX(${translateX}px)`,
         paddingLeft: indentPx > 0 ? `${indentPx + 8}px` : undefined,
         ...formatStyle,

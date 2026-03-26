@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import {
   Bold,
   Italic,
+  Combine,
   AlignLeft,
   AlignCenter,
   AlignRight,
@@ -13,14 +14,18 @@ import {
 } from "lucide-react";
 import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import { useHyperFormula } from "@/hooks/use-hyperformula";
+import { useMergeCells } from "@/hooks/use-merge-cells";
 import { exportToCSV, exportToXLSX } from "@/utils/export-utils";
+import { didUndoRedoTouchMergeHistoryMarker } from "@/utils/formula-utils";
 import type {
   SpreadsheetColumnConfig,
   SpreadsheetExportFormat,
+  SpreadsheetTableMeta,
   TextAlignment,
 } from "@/types/spreadsheet-types";
 import type { VisibilityState } from "@tanstack/react-table";
 import { letterToColIndex, colIndexToLetter } from "@/utils/cell-address";
+import { TableContext } from "./spreadsheet-provider";
 
 interface ToolbarProps {
   columns: SpreadsheetColumnConfig[];
@@ -63,20 +68,73 @@ function useSelectedCellKeys(): string[] {
 }
 
 export function Toolbar({ columns, exportFileName, onExport }: ToolbarProps) {
+  const table = useContext(TableContext);
+  const tableMeta = table?.options.meta as SpreadsheetTableMeta | undefined;
   const hf = useHyperFormula();
   const incrementRenderTrigger = useSpreadsheetStore((s) => s.incrementRenderTrigger);
+  const undoMergeHistory = useSpreadsheetStore((s) => s.undoMergeHistory);
+  const redoMergeHistory = useSpreadsheetStore((s) => s.redoMergeHistory);
   const columnVisibility = useSpreadsheetStore((s) => s.columnVisibility) as VisibilityState;
   const cellFormats = useSpreadsheetStore((s) => s.cellFormats);
+  const mergedCells = useSpreadsheetStore((s) => s.mergedCells);
+  const mergedCellLookup = useSpreadsheetStore((s) => s.mergedCellLookup);
   const toggleBold = useSpreadsheetStore((s) => s.toggleBold);
   const toggleItalic = useSpreadsheetStore((s) => s.toggleItalic);
   const setColor = useSpreadsheetStore((s) => s.setColor);
   const setBgColor = useSpreadsheetStore((s) => s.setBgColor);
   const setTextAlign = useSpreadsheetStore((s) => s.setTextAlign);
   const activeCell = useSpreadsheetStore((s) => s.activeCell);
+  const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
 
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const selectedKeys = useSelectedCellKeys();
+
+  const visibleColumnIds = useMemo(() => {
+    if (!table) return columns.map((column) => String(column.id));
+    return table
+      .getVisibleLeafColumns()
+      .map((column) => column.id)
+      .filter((id) => id !== "_row_number");
+  }, [columns, table]);
+
+  const leftPinnedCount = useMemo(() => {
+    if (!table) return 0;
+    return table
+      .getLeftVisibleLeafColumns()
+      .filter((column) => column.id !== "_row_number").length;
+  }, [table]);
+
+  const centerCount = useMemo(() => {
+    if (!table) return visibleColumnIds.length;
+    return table
+      .getCenterVisibleLeafColumns()
+      .filter((column) => column.id !== "_row_number").length;
+  }, [table, visibleColumnIds.length]);
+
+  const {
+    toggleMerge,
+    unmerge,
+    canMergeSelection,
+    isSelectionExactlyMerged,
+    getMergedCellAt,
+  } = useMergeCells({
+    visibleColumnIds,
+    leftPinnedCount,
+    centerCount,
+    onClearCellValue: (rowIndex, columnId, value) =>
+      tableMeta?.updateData(rowIndex, columnId, value) !== false,
+  });
+
+  const activeMerge = useMemo(() => {
+    if (!activeCell) return null;
+    const colIndex = visibleColumnIds.indexOf(activeCell.columnId);
+    if (colIndex === -1) return null;
+    return getMergedCellAt(activeCell.rowIndex, colIndex);
+  }, [activeCell, getMergedCellAt, visibleColumnIds]);
+
+  const mergeActive = isSelectionExactlyMerged(selectionRange) || Boolean(activeMerge);
+  const canToggleMerge = canMergeSelection || Boolean(activeMerge);
 
   // Close export menu on click outside
   useEffect(() => {
@@ -99,19 +157,33 @@ export function Toolbar({ columns, exportFileName, onExport }: ToolbarProps) {
 
   const handleUndo = useCallback(() => {
     if (!hf) return;
-    if (hf.isThereSomethingToUndo()) {
-      hf.undo();
+    if (!hf.isThereSomethingToUndo()) return;
+    try {
+      const changes = hf.undo();
+      if (didUndoRedoTouchMergeHistoryMarker(hf, changes)) {
+        undoMergeHistory?.();
+      }
       incrementRenderTrigger();
+      tableMeta?.syncFromFormulaEngine?.();
+    } catch (error) {
+      console.error("Undo failed:", error);
     }
-  }, [hf, incrementRenderTrigger]);
+  }, [hf, incrementRenderTrigger, tableMeta, undoMergeHistory]);
 
   const handleRedo = useCallback(() => {
     if (!hf) return;
-    if (hf.isThereSomethingToRedo()) {
-      hf.redo();
+    if (!hf.isThereSomethingToRedo()) return;
+    try {
+      const changes = hf.redo();
+      if (didUndoRedoTouchMergeHistoryMarker(hf, changes)) {
+        redoMergeHistory?.();
+      }
       incrementRenderTrigger();
+      tableMeta?.syncFromFormulaEngine?.();
+    } catch (error) {
+      console.error("Redo failed:", error);
     }
-  }, [hf, incrementRenderTrigger]);
+  }, [hf, incrementRenderTrigger, redoMergeHistory, tableMeta]);
 
   const handleExportCSV = useCallback(() => {
     if (!hf) return;
@@ -121,10 +193,12 @@ export function Toolbar({ columns, exportFileName, onExport }: ToolbarProps) {
       columns,
       columnVisibility,
       getExportFileName(exportFileName, "csv"),
+      { mergedCells, mergedCellLookup },
+      visibleColumnIds,
     );
     onExport?.("csv");
     setShowExportMenu(false);
-  }, [hf, columns, columnVisibility, exportFileName, onExport]);
+    }, [hf, columns, columnVisibility, exportFileName, onExport, mergedCells, mergedCellLookup, visibleColumnIds]);
 
   const handleExportXLSX = useCallback(() => {
     if (!hf) return;
@@ -134,10 +208,12 @@ export function Toolbar({ columns, exportFileName, onExport }: ToolbarProps) {
       columns,
       columnVisibility,
       getExportFileName(exportFileName, "xlsx"),
+      { mergedCells, mergedCellLookup },
+      visibleColumnIds,
     );
     onExport?.("xlsx");
     setShowExportMenu(false);
-  }, [hf, columns, columnVisibility, exportFileName, onExport]);
+  }, [hf, columns, columnVisibility, exportFileName, onExport, mergedCells, mergedCellLookup, visibleColumnIds]);
 
   const handleAlign = useCallback(
     (align: TextAlignment) => {
@@ -145,6 +221,14 @@ export function Toolbar({ columns, exportFileName, onExport }: ToolbarProps) {
     },
     [selectedKeys, setTextAlign],
   );
+
+  const handleToggleMerge = useCallback(() => {
+    if (activeMerge && !isSelectionExactlyMerged(selectionRange)) {
+      unmerge(activeMerge.merge.row, activeMerge.merge.col);
+      return;
+    }
+    toggleMerge(selectionRange);
+  }, [activeMerge, isSelectionExactlyMerged, selectionRange, toggleMerge, unmerge]);
 
   const toolbarBtn = (
     label: string,
@@ -178,6 +262,7 @@ export function Toolbar({ columns, exportFileName, onExport }: ToolbarProps) {
       {/* Text formatting */}
       {toolbarBtn("Bold", <Bold className="w-4 h-4" />, () => toggleBold(selectedKeys), isBold, selectedKeys.length === 0)}
       {toolbarBtn("Italic", <Italic className="w-4 h-4" />, () => toggleItalic(selectedKeys), isItalic, selectedKeys.length === 0)}
+      {toolbarBtn("Merge Cells (Ctrl+M)", <Combine className="w-4 h-4" />, handleToggleMerge, mergeActive, !canToggleMerge)}
       {separator}
 
       {/* Text color */}

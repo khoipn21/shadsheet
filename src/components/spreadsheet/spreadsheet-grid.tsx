@@ -12,6 +12,7 @@ import { useCellSelection } from "@/hooks/use-cell-selection";
 import { useClipboard } from "@/hooks/use-clipboard";
 import { useAutoFill } from "@/hooks/use-auto-fill";
 import { useGridOperations } from "@/hooks/use-grid-operations";
+import { useMergeCells } from "@/hooks/use-merge-cells";
 import type {
   CellValue,
   ClipboardSelectionMode,
@@ -21,11 +22,17 @@ import type {
   SpreadsheetTableMeta,
 } from "@/types/spreadsheet-types";
 import { letterToColIndex } from "@/utils/cell-address";
-import { getCellRawValue } from "@/utils/formula-utils";
+import { findVisibleMerges, buildMergeIntervals } from "@/utils/merge-interval-tree";
+import { getCellDisplayValue, getCellRawValue } from "@/utils/formula-utils";
 import {
   getFormulaReferenceColorMap,
   isFormulaValue,
 } from "@/utils/formula-reference-utils";
+import {
+  getMergeEndCol,
+  getMergeEndRow,
+  getMergeLookupResult,
+} from "@/utils/merge-cell-utils";
 import { isCellEditable } from "@/utils/validation-utils";
 import type { Row, Cell } from "@tanstack/react-table";
 
@@ -39,6 +46,22 @@ interface CellOutline {
   right: boolean;
   bottom: boolean;
   left: boolean;
+}
+
+interface MergeOutlineBounds {
+  endRow: number;
+  endColIndex: number;
+}
+
+interface CellMergeRenderState {
+  isCovered: boolean;
+  mergeSpan: {
+    rowSpan: number;
+    colSpan: number;
+    totalWidth: number;
+    totalHeight: number;
+  } | null;
+  outlineBounds: MergeOutlineBounds | null;
 }
 
 interface SpreadsheetGridProps {
@@ -63,6 +86,8 @@ export function SpreadsheetGrid({
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
+  const prevVisibleColumnSignatureRef = useRef<string | null>(null);
+  const prevVisibleColumnIdsRef = useRef<string[] | null>(null);
   const hf = useHyperFormula();
   const gridColumns = useSpreadsheetStore((s) => s.columns);
   const gridSorting = useSpreadsheetStore((s) => s.sorting);
@@ -85,9 +110,12 @@ export function SpreadsheetGrid({
     const formulaPreviewValue = useSpreadsheetStore((s) => s.formulaPreviewValue);
     const formulaRenderTrigger = useSpreadsheetStore((s) => s.renderTrigger);
     const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
-    const setActiveCell = useSpreadsheetStore((s) => s.setActiveCell);
+    const mergedCells = useSpreadsheetStore((s) => s.mergedCells);
+  const mergedCellLookup = useSpreadsheetStore((s) => s.mergedCellLookup);
+  const setActiveCell = useSpreadsheetStore((s) => s.setActiveCell);
   const setSelection = useSpreadsheetStore((s) => s.setSelection);
   const startEditing = useSpreadsheetStore((s) => s.startEditing);
+  const reindexMergedCells = useSpreadsheetStore((s) => s.reindexMergedCells);
 
   const setContextMenu = useSpreadsheetStore((s) => s.setContextMenu);
   const setSorting = useSpreadsheetStore((s) => s.setSorting);
@@ -105,6 +133,7 @@ export function SpreadsheetGrid({
     void formulaRenderTrigger;
 
   const meta = table.options.meta as SpreadsheetTableMeta | undefined;
+  const mergeVirtualized = meta?.featureFlags.mergeVirtualized ?? false;
   const allRows = table.getRowModel().rows;
 
   // Separate pinned rows from scrollable rows
@@ -119,14 +148,35 @@ export function SpreadsheetGrid({
     () => allRows.filter((r) => pinnedBottomIds.has(r.id)),
     [allRows, pinnedBottomIds],
   );
+  const pinnedRowIndexes = useMemo(
+    () => new Set([...pinnedTopRows, ...pinnedBottomRows].map((row) => row.index)),
+    [pinnedBottomRows, pinnedTopRows],
+  );
   const scrollableRows = useMemo(
     () => allRows.filter((r) => !pinnedTopIds.has(r.id) && !pinnedBottomIds.has(r.id)),
     [allRows, pinnedTopIds, pinnedBottomIds],
   );
+  const rowByIndex = useMemo(() => {
+    const map = new Map<number, Row<Record<string, CellValue>>>();
+    allRows.forEach((row) => map.set(row.index, row));
+    return map;
+  }, [allRows]);
 
   const leftColumns = table.getLeftVisibleLeafColumns();
   const centerColumns = table.getCenterVisibleLeafColumns();
   const rightColumns = table.getRightVisibleLeafColumns();
+  const leftDataColumns = useMemo(
+    () => leftColumns.filter((column) => column.id !== "_row_number"),
+    [leftColumns],
+  );
+  const centerDataColumns = useMemo(
+    () => centerColumns.filter((column) => column.id !== "_row_number"),
+    [centerColumns],
+  );
+  const rightDataColumns = useMemo(
+    () => rightColumns.filter((column) => column.id !== "_row_number"),
+    [rightColumns],
+  );
 
   const hasLeftPinned = leftColumns.length > 0;
   const hasRightPinned = rightColumns.length > 0;
@@ -134,10 +184,10 @@ export function SpreadsheetGrid({
   // Build ordered list of visible data column IDs (exclude _row_number)
   const visibleColumnIds = useMemo(
     () =>
-      [...leftColumns, ...centerColumns, ...rightColumns]
-        .map((col) => col.id)
-        .filter((id) => id !== "_row_number"),
-    [leftColumns, centerColumns, rightColumns],
+      [...leftDataColumns, ...centerDataColumns, ...rightDataColumns].map(
+        (col) => col.id,
+      ),
+    [leftDataColumns, centerDataColumns, rightDataColumns],
   );
 
   // Column ID → visual index map (for selection range checks)
@@ -146,6 +196,52 @@ export function SpreadsheetGrid({
     visibleColumnIds.forEach((id, i) => map.set(id, i));
     return map;
   }, [visibleColumnIds]);
+  const visibleColumnSignature = useMemo(
+    () => visibleColumnIds.join("|"),
+    [visibleColumnIds],
+  );
+
+  const visibleColumnWidths = useMemo(() => {
+    const widthById = new Map<string, number>();
+    for (const column of [...leftColumns, ...centerColumns, ...rightColumns]) {
+      widthById.set(
+        column.id,
+        gridColumnResizePreview[column.id] ?? column.getSize() ?? DEFAULT_COL_WIDTH,
+      );
+    }
+    return visibleColumnIds.map(
+      (columnId) => widthById.get(columnId) ?? DEFAULT_COL_WIDTH,
+    );
+  }, [
+    centerColumns,
+    gridColumnResizePreview,
+    leftColumns,
+    rightColumns,
+    visibleColumnIds,
+  ]);
+
+  const mergeDimensions = useMemo(
+    () =>
+      mergedCells.map((merge) => {
+        let totalWidth = 0;
+        const endCol = getMergeEndCol(merge);
+        for (let col = merge.col; col <= endCol; col++) {
+          totalWidth += visibleColumnWidths[col] ?? DEFAULT_COL_WIDTH;
+        }
+        return {
+          totalWidth,
+          totalHeight: merge.rowSpan * ROW_HEIGHT,
+          endRow: getMergeEndRow(merge),
+          endCol,
+        };
+      }),
+    [mergedCells, visibleColumnWidths],
+  );
+
+  const mergeIntervals = useMemo(
+    () => buildMergeIntervals(mergedCells),
+    [mergedCells],
+  );
 
     const totalRowCount = scrollableRows.length;
 
@@ -221,6 +317,77 @@ export function SpreadsheetGrid({
   const virtualCols = colVirtualizer.getVirtualItems();
   const totalHeight = rowVirtualizer.getTotalSize();
   const totalCenterWidth = colVirtualizer.getTotalSize();
+  const lastScrollableRowIndex =
+    scrollableRows[scrollableRows.length - 1]?.index ?? 0;
+  const visibleRowStart =
+    virtualRows.length > 0
+      ? (scrollableRows[virtualRows[0].index]?.index ?? 0)
+      : (scrollableRows[0]?.index ?? 0);
+  const visibleRowEnd =
+    virtualRows.length > 0
+      ? (scrollableRows[virtualRows[virtualRows.length - 1].index]?.index ??
+        lastScrollableRowIndex)
+      : lastScrollableRowIndex;
+  const centerVisibleStartCol =
+    leftDataColumns.length + (virtualCols[0]?.index ?? 0);
+  const centerVisibleEndCol =
+    leftDataColumns.length +
+    (virtualCols[virtualCols.length - 1]?.index ??
+      Math.max(centerDataColumns.length - 1, 0));
+  const visibleMergeIndices = useMemo(() => {
+    if (!mergeVirtualized || mergedCells.length === 0) return null;
+    const rowStart = visibleRowStart;
+    const rowEnd = visibleRowEnd;
+
+    const sets: number[] = [];
+    const leftCount = leftDataColumns.length;
+    const centerCount = centerDataColumns.length;
+    const rightCount = rightDataColumns.length;
+
+    if (leftCount > 0) {
+      sets.push(...findVisibleMerges(mergeIntervals, rowStart, rowEnd, 0, leftCount - 1));
+    }
+
+    if (centerCount > 0) {
+      const centerStart = virtualCols[0]?.index ?? 0;
+      const centerEnd = virtualCols[virtualCols.length - 1]?.index ?? centerCount - 1;
+      sets.push(
+        ...findVisibleMerges(
+          mergeIntervals,
+          rowStart,
+          rowEnd,
+          leftCount + centerStart,
+          leftCount + centerEnd,
+        ),
+      );
+    }
+
+    if (rightCount > 0) {
+      const startCol = visibleColumnIds.length - rightCount;
+      sets.push(
+        ...findVisibleMerges(
+          mergeIntervals,
+          rowStart,
+          rowEnd,
+          startCol,
+          visibleColumnIds.length - 1,
+        ),
+      );
+    }
+
+    return new Set(sets);
+  }, [
+    centerDataColumns.length,
+    leftDataColumns.length,
+    mergeIntervals,
+    mergeVirtualized,
+    mergedCells.length,
+    rightDataColumns.length,
+    virtualCols,
+    visibleRowEnd,
+    visibleRowStart,
+    visibleColumnIds.length,
+  ]);
   const centerColumnSizeKey = centerColumns
     .map((column) => `${column.id}:${gridColumnResizePreview[column.id] ?? column.getSize()}`)
     .join("|");
@@ -228,6 +395,26 @@ export function SpreadsheetGrid({
   useEffect(() => {
     colVirtualizer.measure();
   }, [centerColumnSizeKey, colVirtualizer]);
+
+  useEffect(() => {
+    const previousSignature = prevVisibleColumnSignatureRef.current;
+    const previousVisibleColumnIds = prevVisibleColumnIdsRef.current;
+    if (
+      previousVisibleColumnIds != null &&
+      previousSignature != null &&
+      previousSignature !== visibleColumnSignature &&
+      mergedCells.length > 0
+    ) {
+      reindexMergedCells(previousVisibleColumnIds, visibleColumnIds);
+    }
+    prevVisibleColumnIdsRef.current = [...visibleColumnIds];
+    prevVisibleColumnSignatureRef.current = visibleColumnSignature;
+  }, [
+    mergedCells.length,
+    reindexMergedCells,
+    visibleColumnIds,
+    visibleColumnSignature,
+  ]);
 
   // Total widths for pinned panes (non-virtualized)
   const leftWidth = leftColumns.reduce(
@@ -250,24 +437,145 @@ export function SpreadsheetGrid({
   // Get cell value helper
   const getCellValue = useCallback(
     (rowIndex: number, columnId: string): CellValue => {
-      const row = scrollableRows[rowIndex];
+      if (hf) {
+        return getCellDisplayValue(hf, rowIndex, letterToColIndex(columnId));
+      }
+      const row = rowByIndex.get(rowIndex);
       if (!row) return null;
       return row.getValue(columnId) as CellValue;
     },
-    [scrollableRows],
+    [hf, rowByIndex],
   );
 
   // Check if a cell is editable (respects column config + row-level editable functions)
   const canEditCell = useCallback(
     (rowIndex: number, columnId: string): boolean => {
       const colConfig = meta?.getColumnConfig(columnId) as SpreadsheetColumnConfig | undefined;
-      const row = scrollableRows[rowIndex];
+      const row = rowByIndex.get(rowIndex);
       return isCellEditable(colConfig, row?.original);
     },
-    [meta, scrollableRows],
+    [meta, rowByIndex],
   );
 
+  const getCellMergeRenderState = useCallback(
+    (rowIndex: number, columnId: string): CellMergeRenderState => {
+      const colIndex = columnIdToIndex.get(columnId);
+      if (colIndex == null) {
+        return { isCovered: false, mergeSpan: null, outlineBounds: null };
+      }
+
+      const mergeIndex = mergedCellLookup.get(`${rowIndex}-${colIndex}`);
+      if (mergeIndex == null) {
+        return { isCovered: false, mergeSpan: null, outlineBounds: null };
+      }
+
+      const isWithinScrollableViewport =
+        rowIndex >= visibleRowStart && rowIndex <= visibleRowEnd;
+      if (
+        visibleMergeIndices &&
+        isWithinScrollableViewport &&
+        !visibleMergeIndices.has(mergeIndex)
+      ) {
+        return { isCovered: false, mergeSpan: null, outlineBounds: null };
+      }
+
+      const merge = mergedCells[mergeIndex];
+      const dimensions = mergeDimensions[mergeIndex];
+      if (!merge || !dimensions) {
+        return { isCovered: false, mergeSpan: null, outlineBounds: null };
+      }
+
+      const outlineBounds = {
+        endRow: dimensions.endRow,
+        endColIndex: dimensions.endCol,
+      };
+        const isAnchor = merge.row === rowIndex && merge.col === colIndex;
+        if (!isAnchor) {
+          if (!isWithinScrollableViewport || pinnedRowIndexes.has(merge.row)) {
+            return { isCovered: true, mergeSpan: null, outlineBounds };
+          }
+          const leftCount = leftDataColumns.length;
+          const centerCount = centerDataColumns.length;
+          const rightCount = rightDataColumns.length;
+        let paneColStart = 0;
+        let paneColEnd = visibleColumnIds.length - 1;
+
+        if (colIndex < leftCount) {
+          paneColStart = 0;
+          paneColEnd = leftCount - 1;
+        } else if (colIndex >= leftCount + centerCount) {
+          paneColStart = visibleColumnIds.length - rightCount;
+          paneColEnd = visibleColumnIds.length - 1;
+        } else {
+          paneColStart = centerVisibleStartCol;
+          paneColEnd = centerVisibleEndCol;
+        }
+
+        const fallbackRow = Math.max(merge.row, visibleRowStart);
+        const fallbackCol = Math.max(merge.col, paneColStart);
+        if (rowIndex === fallbackRow && colIndex === fallbackCol) {
+          const visibleEndRow = Math.min(dimensions.endRow, visibleRowEnd);
+          const visibleEndCol = Math.min(dimensions.endCol, paneColEnd);
+          let fallbackWidth = 0;
+          for (let col = colIndex; col <= visibleEndCol; col++) {
+            fallbackWidth += visibleColumnWidths[col] ?? DEFAULT_COL_WIDTH;
+          }
+          return {
+            isCovered: false,
+            mergeSpan: {
+              rowSpan: visibleEndRow - rowIndex + 1,
+              colSpan: visibleEndCol - colIndex + 1,
+              totalWidth: fallbackWidth,
+              totalHeight: (visibleEndRow - rowIndex + 1) * ROW_HEIGHT,
+            },
+            outlineBounds: {
+              endRow: visibleEndRow,
+              endColIndex: visibleEndCol,
+            },
+          };
+        }
+
+        return { isCovered: true, mergeSpan: null, outlineBounds };
+      }
+
+      return {
+        isCovered: false,
+        mergeSpan: {
+          rowSpan: merge.rowSpan,
+          colSpan: merge.colSpan,
+          totalWidth: dimensions.totalWidth,
+          totalHeight: dimensions.totalHeight,
+        },
+        outlineBounds,
+      };
+    },
+    [
+      columnIdToIndex,
+      centerDataColumns.length,
+      centerVisibleEndCol,
+      centerVisibleStartCol,
+      leftDataColumns.length,
+      mergeDimensions,
+      mergedCellLookup,
+      mergedCells,
+      rightDataColumns.length,
+      visibleColumnIds.length,
+      visibleColumnWidths,
+        visibleRowEnd,
+        visibleRowStart,
+        visibleMergeIndices,
+        pinnedRowIndexes,
+      ],
+    );
+
   // --- Hooks ---
+  const { toggleMerge } = useMergeCells({
+    visibleColumnIds,
+    leftPinnedCount: leftDataColumns.length,
+    centerCount: centerDataColumns.length,
+    onClearCellValue: (rowIndex, columnId, value) =>
+      meta?.updateData(rowIndex, columnId, value) !== false,
+  });
 
   const { handleKeyDown } = useKeyboardNavigation({
     activeCell,
@@ -285,12 +593,20 @@ export function SpreadsheetGrid({
     colVirtualizer,
     hf,
     incrementRenderTrigger,
+    mergedCells,
+    mergedCellLookup,
+    onToggleMerge: () => {
+      void toggleMerge(selectionRange);
+    },
   });
 
   const { handleCellMouseDown, handleCellMouseEnter, handleMouseUp } = useCellSelection({
     activeCell,
     setActiveCell,
     setSelection,
+    visibleColumnIds,
+    mergedCells,
+    mergedCellLookup,
   });
 
   const { handleCopy, handleCut, handlePaste } = useClipboard({
@@ -366,15 +682,54 @@ export function SpreadsheetGrid({
       const colId = target.getAttribute("data-col-id");
       if (!colId || colId === "_row_number") return;
 
-      e.preventDefault();
-      // Determine row index from the virtual row structure
-      const rowEl = target.closest("[data-row-index]");
-      const rowIdx = rowEl ? parseInt(rowEl.getAttribute("data-row-index") ?? "0", 10) : (activeCell?.rowIndex ?? 0);
+        e.preventDefault();
+        // Determine row index from the virtual row structure
+        const rowEl = target.closest("[data-row-index]");
+        const rowIdx = rowEl ? parseInt(rowEl.getAttribute("data-row-index") ?? "0", 10) : (activeCell?.rowIndex ?? 0);
+        const colIdx = visibleColumnIds.indexOf(colId);
+        if (colIdx === -1) return;
 
-      setContextMenu({ x: e.clientX, y: e.clientY, cell: { rowIndex: rowIdx, columnId: colId } });
-    },
-    [activeCell, setContextMenu],
-  );
+        const mergeAtClick = getMergeLookupResult(
+          mergedCells,
+          mergedCellLookup,
+          rowIdx,
+          colIdx,
+        );
+        if (mergeAtClick) {
+          const startColumnId = visibleColumnIds[mergeAtClick.merge.col] ?? colId;
+          const endColumnId =
+            visibleColumnIds[getMergeEndCol(mergeAtClick.merge)] ?? startColumnId;
+          setActiveCell({
+            rowIndex: mergeAtClick.merge.row,
+            columnId: startColumnId,
+          });
+          setSelection({
+            start: {
+              rowIndex: mergeAtClick.merge.row,
+              columnId: startColumnId,
+            },
+            end: {
+              rowIndex: getMergeEndRow(mergeAtClick.merge),
+              columnId: endColumnId,
+            },
+          });
+        } else {
+          setActiveCell({ rowIndex: rowIdx, columnId: colId });
+          setSelection(null);
+        }
+
+        setContextMenu({ x: e.clientX, y: e.clientY, cell: { rowIndex: rowIdx, columnId: colId } });
+      },
+      [
+        activeCell,
+        mergedCellLookup,
+        mergedCells,
+        setActiveCell,
+        setContextMenu,
+        setSelection,
+        visibleColumnIds,
+      ],
+    );
 
   // Sort handler for context menu
   const handleSort = useCallback(
@@ -387,34 +742,75 @@ export function SpreadsheetGrid({
   // Navigate after editor commit (Enter/Tab move to adjacent cell)
   const handleNavigate = useCallback(
     (fromRow: number, fromColumnId: string, direction: "up" | "down" | "left" | "right") => {
-      const colIdx = visibleColumnIds.indexOf(fromColumnId);
-      if (colIdx === -1) return;
+      const maxCol = visibleColumnIds.length - 1;
+      const maxRow = totalRowCount - 1;
+      if (maxCol < 0 || maxRow < 0) return;
 
-      let nextRow = fromRow;
-      let nextCol = colIdx;
+      const startCol = visibleColumnIds.indexOf(fromColumnId);
+      if (startCol === -1) return;
+
+      const normalizeToAnchor = (row: number, col: number) => {
+        const merge = getMergeLookupResult(mergedCells, mergedCellLookup, row, col);
+        if (!merge) return { row, col };
+        return { row: merge.merge.row, col: merge.merge.col, merge };
+      };
+
+      const normalized = normalizeToAnchor(fromRow, startCol);
+      let nextRow = normalized.row;
+      let nextCol = normalized.col;
+      const currentMerge = normalized.merge;
 
       switch (direction) {
-        case "up": nextRow = Math.max(0, fromRow - 1); break;
-        case "down": nextRow = Math.min(totalRowCount - 1, fromRow + 1); break;
-        case "left": {
-          nextCol = colIdx - 1;
-          if (nextCol < 0) { nextCol = visibleColumnIds.length - 1; nextRow = Math.max(0, nextRow - 1); }
+        case "up":
+          nextRow = currentMerge?.isAnchor
+            ? currentMerge.merge.row - 1
+            : normalized.row - 1;
           break;
-        }
-        case "right": {
-          nextCol = colIdx + 1;
-          if (nextCol >= visibleColumnIds.length) { nextCol = 0; nextRow = Math.min(totalRowCount - 1, nextRow + 1); }
+        case "down":
+          nextRow = currentMerge?.isAnchor
+            ? currentMerge.merge.row + currentMerge.merge.rowSpan
+            : normalized.row + 1;
           break;
-        }
+        case "left":
+          nextCol = currentMerge?.isAnchor
+            ? currentMerge.merge.col - 1
+            : normalized.col - 1;
+          break;
+        case "right":
+          nextCol = currentMerge?.isAnchor
+            ? currentMerge.merge.col + currentMerge.merge.colSpan
+            : normalized.col + 1;
+          break;
       }
 
-      const next = { rowIndex: nextRow, columnId: visibleColumnIds[nextCol] };
+      if (nextCol < 0) {
+        nextCol = maxCol;
+        nextRow -= 1;
+      } else if (nextCol > maxCol) {
+        nextCol = 0;
+        nextRow += 1;
+      }
+      nextRow = Math.max(0, Math.min(nextRow, maxRow));
+      nextCol = Math.max(0, Math.min(nextCol, maxCol));
+
+      const snapped = normalizeToAnchor(nextRow, nextCol);
+      const next = {
+        rowIndex: snapped.row,
+        columnId: visibleColumnIds[snapped.col],
+      };
       setActiveCell(next);
       setSelection(null);
       // Re-focus grid container so keyboard navigation continues
       gridRef.current?.focus();
     },
-    [visibleColumnIds, totalRowCount, setActiveCell, setSelection],
+    [
+      mergedCellLookup,
+      mergedCells,
+      setActiveCell,
+      setSelection,
+      totalRowCount,
+      visibleColumnIds,
+    ],
   );
 
   // Check if a cell is in the current selection range
@@ -436,7 +832,12 @@ export function SpreadsheetGrid({
   );
 
   const getRangeOutline = useCallback(
-    (range: SelectionRange | null, rowIndex: number, columnId: string): CellOutline | null => {
+    (
+      range: SelectionRange | null,
+      rowIndex: number,
+      columnId: string,
+      mergeOutline?: MergeOutlineBounds | null,
+    ): CellOutline | null => {
       if (!range) return null;
       const { start, end } = range;
       const sc = columnIdToIndex.get(start.columnId);
@@ -452,11 +853,13 @@ export function SpreadsheetGrid({
       if (rowIndex < minRow || rowIndex > maxRow || cc < minCol || cc > maxCol) {
         return null;
       }
+      const endRow = mergeOutline?.endRow ?? rowIndex;
+      const endCol = mergeOutline?.endColIndex ?? cc;
 
       return {
         top: rowIndex === minRow,
-        right: cc === maxCol,
-        bottom: rowIndex === maxRow,
+        right: endCol === maxCol,
+        bottom: endRow === maxRow,
         left: cc === minCol,
       };
     },
@@ -464,13 +867,14 @@ export function SpreadsheetGrid({
   );
 
   const getSelectionOutline = useCallback(
-    (rowIndex: number, columnId: string) => getRangeOutline(selectionRange, rowIndex, columnId),
+    (rowIndex: number, columnId: string, mergeOutline?: MergeOutlineBounds | null) =>
+      getRangeOutline(selectionRange, rowIndex, columnId, mergeOutline),
     [getRangeOutline, selectionRange],
   );
 
   const getClipboardOutline = useCallback(
-    (rowIndex: number, columnId: string) =>
-      getRangeOutline(clipboardSelection, rowIndex, columnId),
+    (rowIndex: number, columnId: string, mergeOutline?: MergeOutlineBounds | null) =>
+      getRangeOutline(clipboardSelection, rowIndex, columnId, mergeOutline),
     [clipboardSelection, getRangeOutline],
   );
 
@@ -551,6 +955,7 @@ export function SpreadsheetGrid({
               onCellMouseEnter={handleCellMouseEnter}
               getFormulaReferenceColor={getFormulaReferenceColor}
             onNavigate={handleNavigate}
+            getCellMergeRenderState={getCellMergeRenderState}
           />
       )}
 
@@ -578,6 +983,7 @@ export function SpreadsheetGrid({
                   onCellMouseEnter={handleCellMouseEnter}
                   getFormulaReferenceColor={getFormulaReferenceColor}
                 onNavigate={handleNavigate}
+                getCellMergeRenderState={getCellMergeRenderState}
               />
           )}
 
@@ -603,6 +1009,8 @@ export function SpreadsheetGrid({
                     if (!cell) return null;
                     const cId = cell.column.id;
                     const rIdx = cell.row.index;
+                    const mergeState = getCellMergeRenderState(rIdx, cId);
+                    if (mergeState.isCovered) return null;
                       return (
                         <CellRenderer
                           key={cell.id}
@@ -610,10 +1018,19 @@ export function SpreadsheetGrid({
                           width={gridColumnResizePreview[cId] ?? virtualCol.size}
                           height={virtualRow.size}
                           translateX={virtualCol.start}
+                          mergeSpan={mergeState.mergeSpan}
                           isActive={isCellActive(rIdx, cId)}
                             isSelected={isCellSelected(rIdx, cId)}
-                            selectionOutline={getSelectionOutline(rIdx, cId)}
-                            clipboardOutline={getClipboardOutline(rIdx, cId)}
+                            selectionOutline={getSelectionOutline(
+                              rIdx,
+                              cId,
+                              mergeState.outlineBounds,
+                            )}
+                            clipboardOutline={getClipboardOutline(
+                              rIdx,
+                              cId,
+                              mergeState.outlineBounds,
+                            )}
                             clipboardMode={clipboardSelectionMode}
                             rowSelected={isRowSelected}
                             rowExpanded={row.getIsExpanded()}
@@ -668,6 +1085,7 @@ export function SpreadsheetGrid({
                 onCellMouseEnter={handleCellMouseEnter}
                   getFormulaReferenceColor={getFormulaReferenceColor}
                 onNavigate={handleNavigate}
+                getCellMergeRenderState={getCellMergeRenderState}
               />
           )}
         </div>
@@ -694,6 +1112,7 @@ export function SpreadsheetGrid({
             onCellMouseEnter={handleCellMouseEnter}
               getFormulaReferenceColor={getFormulaReferenceColor}
             onNavigate={handleNavigate}
+            getCellMergeRenderState={getCellMergeRenderState}
           />
       )}
 
@@ -708,6 +1127,8 @@ export function SpreadsheetGrid({
       {/* Context menu (Portal) */}
       <ContextMenu
         visibleColumnIds={visibleColumnIds}
+        leftPinnedCount={leftDataColumns.length}
+        centerCount={centerDataColumns.length}
         totalRowCount={totalRowCount}
         meta={meta}
         getCellValue={getCellValue}
@@ -726,8 +1147,16 @@ export function SpreadsheetGrid({
 interface SelectionCallbacks {
   isCellActive: (rowIndex: number, columnId: string) => boolean;
   isCellSelected: (rowIndex: number, columnId: string) => boolean;
-  getSelectionOutline: (rowIndex: number, columnId: string) => CellOutline | null;
-  getClipboardOutline: (rowIndex: number, columnId: string) => CellOutline | null;
+  getSelectionOutline: (
+    rowIndex: number,
+    columnId: string,
+    mergeOutline?: MergeOutlineBounds | null,
+  ) => CellOutline | null;
+  getClipboardOutline: (
+    rowIndex: number,
+    columnId: string,
+    mergeOutline?: MergeOutlineBounds | null,
+  ) => CellOutline | null;
   clipboardMode: ClipboardSelectionMode | null;
   onCellMouseDown: (rowIndex: number, columnId: string, shiftKey: boolean) => void;
   onCellMouseEnter: (rowIndex: number, columnId: string) => void;
@@ -736,6 +1165,7 @@ interface SelectionCallbacks {
     columnId: string,
   ) => string | undefined;
   onNavigate: (fromRow: number, fromColumnId: string, direction: "up" | "down" | "left" | "right") => void;
+  getCellMergeRenderState: (rowIndex: number, columnId: string) => CellMergeRenderState;
 }
 
 /** Non-virtualized pinned column pane (left or right) */
@@ -755,6 +1185,7 @@ function PinnedPane({
   onCellMouseEnter,
   getFormulaReferenceColor,
   onNavigate,
+  getCellMergeRenderState,
 }: {
   rows: Row<Record<string, CellValue>>[];
   virtualRows: { index: number; start: number; size: number }[];
@@ -775,13 +1206,14 @@ function PinnedPane({
 
         let offset = 0;
         return (
-          <div
-            key={row.id}
-            className={`absolute left-0 w-full ${isSelected ? "bg-primary/5" : ""}`}
-            style={{
-              height: virtualRow.size,
-              transform: `translateY(${virtualRow.start}px)`,
-            }}
+            <div
+              key={row.id}
+              className={`absolute left-0 w-full ${isSelected ? "bg-primary/5" : ""}`}
+              data-row-index={row.index}
+              style={{
+                height: virtualRow.size,
+                transform: `translateY(${virtualRow.start}px)`,
+              }}
             >
               {cells.map((cell) => {
                 const width =
@@ -790,6 +1222,8 @@ function PinnedPane({
                 offset += width;
               const cId = cell.column.id;
               const rIdx = cell.row.index;
+              const mergeState = getCellMergeRenderState(rIdx, cId);
+              if (mergeState.isCovered) return null;
                 return (
                   <CellRenderer
                     key={cell.id}
@@ -797,10 +1231,19 @@ function PinnedPane({
                       width={width}
                       height={virtualRow.size}
                       translateX={translateX}
+                      mergeSpan={mergeState.mergeSpan}
                         isActive={isCellActive(rIdx, cId)}
                         isSelected={isCellSelected(rIdx, cId)}
-                        selectionOutline={getSelectionOutline(rIdx, cId)}
-                        clipboardOutline={getClipboardOutline(rIdx, cId)}
+                        selectionOutline={getSelectionOutline(
+                          rIdx,
+                          cId,
+                          mergeState.outlineBounds,
+                        )}
+                        clipboardOutline={getClipboardOutline(
+                          rIdx,
+                          cId,
+                          mergeState.outlineBounds,
+                        )}
                         clipboardMode={clipboardMode}
                         rowSelected={isSelected}
                         rowExpanded={row.getIsExpanded()}
@@ -838,6 +1281,7 @@ function FixedRowBand({
   onCellMouseEnter,
   getFormulaReferenceColor,
   onNavigate,
+  getCellMergeRenderState,
 }: {
   rows: Row<Record<string, CellValue>>[];
   bandHeight: number;
@@ -866,7 +1310,7 @@ function FixedRowBand({
             const cells = row.getLeftVisibleCells();
             let offset = 0;
             return (
-                <div key={row.id} className="relative" style={{ height: ROW_HEIGHT }}>
+                <div key={row.id} className="relative" data-row-index={row.index} style={{ height: ROW_HEIGHT }}>
                   {cells.map((cell) => {
                     const width =
                       columnResizePreview[cell.column.id] ?? cell.column.getSize();
@@ -874,6 +1318,8 @@ function FixedRowBand({
                     offset += width;
                   const cId = cell.column.id;
                   const rIdx = cell.row.index;
+                  const mergeState = getCellMergeRenderState(rIdx, cId);
+                  if (mergeState.isCovered) return null;
                     return (
                       <CellRenderer
                         key={cell.id}
@@ -881,10 +1327,19 @@ function FixedRowBand({
                           width={width}
                           height={ROW_HEIGHT}
                           translateX={translateX}
+                          mergeSpan={mergeState.mergeSpan}
                             isActive={isCellActive(rIdx, cId)}
                             isSelected={isCellSelected(rIdx, cId)}
-                            selectionOutline={getSelectionOutline(rIdx, cId)}
-                            clipboardOutline={getClipboardOutline(rIdx, cId)}
+                            selectionOutline={getSelectionOutline(
+                              rIdx,
+                              cId,
+                              mergeState.outlineBounds,
+                            )}
+                            clipboardOutline={getClipboardOutline(
+                              rIdx,
+                              cId,
+                              mergeState.outlineBounds,
+                            )}
                             clipboardMode={clipboardMode}
                             rowSelected={row.getIsSelected()}
                             rowExpanded={row.getIsExpanded()}
@@ -906,7 +1361,7 @@ function FixedRowBand({
           const centerCells = row.getCenterVisibleCells();
           let offset = 0;
           return (
-              <div key={row.id} className="relative" style={{ height: ROW_HEIGHT }}>
+              <div key={row.id} className="relative" data-row-index={row.index} style={{ height: ROW_HEIGHT }}>
                 {centerCells.map((cell) => {
                   const width =
                     columnResizePreview[cell.column.id] ?? cell.column.getSize();
@@ -914,6 +1369,8 @@ function FixedRowBand({
                   offset += width;
                 const cId = cell.column.id;
                 const rIdx = cell.row.index;
+                const mergeState = getCellMergeRenderState(rIdx, cId);
+                if (mergeState.isCovered) return null;
                     return (
                       <CellRenderer
                         key={cell.id}
@@ -921,10 +1378,19 @@ function FixedRowBand({
                           width={width}
                           height={ROW_HEIGHT}
                           translateX={translateX}
+                          mergeSpan={mergeState.mergeSpan}
                             isActive={isCellActive(rIdx, cId)}
                             isSelected={isCellSelected(rIdx, cId)}
-                            selectionOutline={getSelectionOutline(rIdx, cId)}
-                            clipboardOutline={getClipboardOutline(rIdx, cId)}
+                            selectionOutline={getSelectionOutline(
+                              rIdx,
+                              cId,
+                              mergeState.outlineBounds,
+                            )}
+                            clipboardOutline={getClipboardOutline(
+                              rIdx,
+                              cId,
+                              mergeState.outlineBounds,
+                            )}
                             clipboardMode={clipboardMode}
                             rowSelected={row.getIsSelected()}
                             rowExpanded={row.getIsExpanded()}
@@ -946,7 +1412,7 @@ function FixedRowBand({
             const cells = row.getRightVisibleCells();
             let offset = 0;
             return (
-                <div key={row.id} className="relative" style={{ height: ROW_HEIGHT }}>
+                <div key={row.id} className="relative" data-row-index={row.index} style={{ height: ROW_HEIGHT }}>
                   {cells.map((cell) => {
                     const width =
                       columnResizePreview[cell.column.id] ?? cell.column.getSize();
@@ -954,6 +1420,8 @@ function FixedRowBand({
                     offset += width;
                   const cId = cell.column.id;
                   const rIdx = cell.row.index;
+                  const mergeState = getCellMergeRenderState(rIdx, cId);
+                  if (mergeState.isCovered) return null;
                     return (
                       <CellRenderer
                         key={cell.id}
@@ -961,10 +1429,19 @@ function FixedRowBand({
                           width={width}
                           height={ROW_HEIGHT}
                           translateX={translateX}
+                          mergeSpan={mergeState.mergeSpan}
                             isActive={isCellActive(rIdx, cId)}
                             isSelected={isCellSelected(rIdx, cId)}
-                            selectionOutline={getSelectionOutline(rIdx, cId)}
-                            clipboardOutline={getClipboardOutline(rIdx, cId)}
+                            selectionOutline={getSelectionOutline(
+                              rIdx,
+                              cId,
+                              mergeState.outlineBounds,
+                            )}
+                            clipboardOutline={getClipboardOutline(
+                              rIdx,
+                              cId,
+                              mergeState.outlineBounds,
+                            )}
                             clipboardMode={clipboardMode}
                             rowSelected={row.getIsSelected()}
                             rowExpanded={row.getIsExpanded()}

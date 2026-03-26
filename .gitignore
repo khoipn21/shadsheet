@@ -23,4 +23,3 @@ coverage/
 *.pid.lock
 *.gz
 plans/
-docs/

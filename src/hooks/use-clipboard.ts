@@ -3,6 +3,12 @@ import type { HyperFormula } from "hyperformula";
 import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import type { CellAddress, CellValue, SelectionRange, SpreadsheetTableMeta } from "@/types/spreadsheet-types";
 import { letterToColIndex } from "@/utils/cell-address";
+import { appendMergeHistoryMarker } from "@/utils/formula-utils";
+import {
+  findMergesIntersectingBounds,
+  getMergeLookupResult,
+  type SelectionBounds,
+} from "@/utils/merge-cell-utils";
 
 interface UseClipboardParams {
   activeCell: CellAddress | null;
@@ -67,6 +73,10 @@ export function useClipboard({
   const clipboardSelection = useSpreadsheetStore((s) => s.clipboardSelection);
   const clipboardSelectionMode = useSpreadsheetStore((s) => s.clipboardSelectionMode);
   const setClipboardSelection = useSpreadsheetStore((s) => s.setClipboardSelection);
+  const mergedCells = useSpreadsheetStore((s) => s.mergedCells);
+  const mergedCellLookup = useSpreadsheetStore((s) => s.mergedCellLookup);
+  const unmergeCells = useSpreadsheetStore((s) => s.unmergeCells);
+  const recordMergeHistory = useSpreadsheetStore((s) => s.recordMergeHistory);
 
   const colIndexOf = useCallback(
     (columnId: string) => visibleColumnIds.indexOf(columnId),
@@ -84,6 +94,7 @@ export function useClipboard({
       const { start, end } = selectionRange;
       const sc = colIndexOf(start.columnId);
       const ec = colIndexOf(end.columnId);
+      if (sc === -1 || ec === -1) return null;
       return {
         minRow: Math.min(start.rowIndex, end.rowIndex),
         maxRow: Math.max(start.rowIndex, end.rowIndex),
@@ -93,6 +104,7 @@ export function useClipboard({
     }
     if (activeCell) {
       const c = colIndexOf(activeCell.columnId);
+      if (c === -1) return null;
       return { minRow: activeCell.rowIndex, maxRow: activeCell.rowIndex, minCol: c, maxCol: c };
     }
     return null;
@@ -106,12 +118,17 @@ export function useClipboard({
     for (let r = minRow; r <= maxRow; r++) {
       const row: CellValue[] = [];
       for (let c = minCol; c <= maxCol; c++) {
+        const merge = getMergeLookupResult(mergedCells, mergedCellLookup, r, c);
+        if (merge && !merge.isAnchor) {
+          row.push("");
+          continue;
+        }
         row.push(getCellValue(r, visibleColumnIds[c]));
       }
       result.push(row);
     }
     return result;
-  }, [getBounds, getCellValue, visibleColumnIds]);
+  }, [getBounds, getCellValue, mergedCellLookup, mergedCells, visibleColumnIds]);
 
   const handleCopy = useCallback(async (clipboardData?: DataTransfer | null) => {
     const data = readSelection();
@@ -160,43 +177,115 @@ export function useClipboard({
     const startRow = activeCell.rowIndex;
     const startCol = colIndexOf(activeCell.columnId);
     if (startCol === -1) return;
+    const maxPasteWidth = rows.reduce((max, row) => Math.max(max, row.length), 0);
+    const pasteBounds: SelectionBounds = {
+      minRow: startRow,
+      maxRow: Math.min(totalRowCount - 1, startRow + rows.length - 1),
+      minCol: startCol,
+      maxCol: Math.min(visibleColumnIds.length - 1, startCol + maxPasteWidth - 1),
+    };
+    const overlappingMerges = findMergesIntersectingBounds(mergedCells, pasteBounds);
+    const mergeSnapshotBefore = mergedCells.map((merge) => ({ ...merge }));
 
-    // Use hf.batch() so the entire paste (+ cut clear) is a single undo step
-    const applyPaste = () => {
-      // Write pasted values
-      for (let r = 0; r < rows.length; r++) {
-        const targetRow = startRow + r;
-        if (targetRow >= totalRowCount) break;
-        for (let c = 0; c < rows[r].length; c++) {
-          const targetCol = startCol + c;
-          if (targetCol >= visibleColumnIds.length) break;
-          const colId = visibleColumnIds[targetCol];
-          if (!canEditCell(targetRow, colId)) continue;
-          const val = rows[r][c];
-          if (meta?.updateData(targetRow, colId, val) === false) continue;
-          if (hf) {
-            hf.setCellContents({ sheet: 0, row: targetRow, col: letterToColIndex(colId) }, [[val]]);
-          }
-        }
+    type CellWrite = { row: number; columnId: string; value: CellValue };
+    const targetWrites: CellWrite[] = [];
+    for (let r = 0; r < rows.length; r++) {
+      const targetRow = startRow + r;
+      if (targetRow >= totalRowCount) break;
+      for (let c = 0; c < rows[r].length; c++) {
+        const targetCol = startCol + c;
+        if (targetCol >= visibleColumnIds.length) break;
+        const columnId = visibleColumnIds[targetCol];
+        if (!canEditCell(targetRow, columnId)) continue;
+        targetWrites.push({ row: targetRow, columnId, value: rows[r][c] });
       }
+    }
 
-      // Clear cut source cells (deferred from handleCut)
-      if (clipboardSelectionMode === "cut" && clipboardSelection) {
-        const { start, end } = clipboardSelection;
-        const sc = visibleColumnIds.indexOf(start.columnId);
-        const ec = visibleColumnIds.indexOf(end.columnId);
+    let clearWrites: CellWrite[] = [];
+    let sourceMerges = [] as ReturnType<typeof findMergesIntersectingBounds>;
+    if (clipboardSelectionMode === "cut" && clipboardSelection) {
+      const { start, end } = clipboardSelection;
+      const sc = visibleColumnIds.indexOf(start.columnId);
+      const ec = visibleColumnIds.indexOf(end.columnId);
+      if (sc !== -1 && ec !== -1) {
         const minRow = Math.min(start.rowIndex, end.rowIndex);
         const maxRow = Math.max(start.rowIndex, end.rowIndex);
         const minCol = Math.min(sc, ec);
         const maxCol = Math.max(sc, ec);
+        const cutBounds: SelectionBounds = { minRow, maxRow, minCol, maxCol };
+        sourceMerges = findMergesIntersectingBounds(mergedCells, cutBounds);
+        const writableSource: CellWrite[] = [];
         for (let r = minRow; r <= maxRow; r++) {
           for (let c = minCol; c <= maxCol; c++) {
-            const colId = visibleColumnIds[c];
-            if (!canEditCell(r, colId)) continue;
-            meta?.updateData(r, colId, null);
-            if (hf) {
-              hf.setCellContents({ sheet: 0, row: r, col: letterToColIndex(colId) }, [[null]]);
-            }
+            const columnId = visibleColumnIds[c];
+            if (!canEditCell(r, columnId)) continue;
+            writableSource.push({ row: r, columnId, value: null });
+          }
+        }
+        clearWrites = writableSource;
+      }
+    }
+
+    const shouldUnmergePasteTargets = targetWrites.length > 0;
+    const shouldProcessCutSource =
+      clipboardSelectionMode === "cut" &&
+      targetWrites.length > 0 &&
+      clearWrites.length > 0;
+    const shouldUnmergeCutSource = shouldProcessCutSource;
+    const mergesToUnmerge = new Map<string, { row: number; col: number }>();
+    if (shouldUnmergePasteTargets) {
+      for (const merge of overlappingMerges) {
+        mergesToUnmerge.set(`${merge.row}-${merge.col}`, { row: merge.row, col: merge.col });
+      }
+    }
+    if (shouldUnmergeCutSource) {
+      for (const merge of sourceMerges) {
+        mergesToUnmerge.set(`${merge.row}-${merge.col}`, { row: merge.row, col: merge.col });
+      }
+    }
+    const hasMergeMutation = mergesToUnmerge.size > 0;
+
+    // Use hf.batch() so the entire paste (+ cut clear + merge mutation marker) is a single undo step.
+    const applyPaste = () => {
+      if (hasMergeMutation) {
+        for (const merge of mergesToUnmerge.values()) {
+          unmergeCells(merge.row, merge.col);
+        }
+        if (hf) {
+          try {
+            appendMergeHistoryMarker(hf);
+          } catch {
+            // Keep paste functional even if marker bookkeeping fails.
+          }
+        }
+      }
+
+      for (const write of targetWrites) {
+        if (meta?.updateData(write.row, write.columnId, write.value) === false) continue;
+        if (hf) {
+          hf.setCellContents(
+            {
+              sheet: 0,
+              row: write.row,
+              col: letterToColIndex(write.columnId),
+            },
+            [[write.value]],
+          );
+        }
+      }
+
+      if (shouldProcessCutSource) {
+        for (const write of clearWrites) {
+          if (meta?.updateData(write.row, write.columnId, null) === false) continue;
+          if (hf) {
+            hf.setCellContents(
+              {
+                sheet: 0,
+                row: write.row,
+                col: letterToColIndex(write.columnId),
+              },
+              [[null]],
+            );
           }
         }
       }
@@ -207,12 +296,15 @@ export function useClipboard({
     } else {
       applyPaste();
     }
+    if (hasMergeMutation) {
+      recordMergeHistory?.(mergeSnapshotBefore);
+    }
     incrementRenderTrigger();
 
-    if (clipboardSelectionMode === "cut") {
+    if (clipboardSelectionMode === "cut" && targetWrites.length > 0) {
       setClipboardSelection(null, null);
     }
-  }, [activeCell, meta, colIndexOf, totalRowCount, visibleColumnIds, canEditCell, hf, incrementRenderTrigger, setClipboardSelection]);
+  }, [activeCell, meta, colIndexOf, totalRowCount, visibleColumnIds, canEditCell, hf, recordMergeHistory, incrementRenderTrigger, setClipboardSelection, clipboardSelectionMode, clipboardSelection, mergedCells, unmergeCells]);
 
   return { handleCopy, handleCut, handlePaste };
 }
