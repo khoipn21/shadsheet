@@ -1,7 +1,13 @@
 import { memo, useCallback, useRef } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
 import { flexRender, type Cell } from "@tanstack/react-table";
-import type { CellValue, CellFormat, ConditionalFormatRule, SpreadsheetTableMeta } from "@/types/spreadsheet-types";
+import type {
+  CellValue,
+  CellFormat,
+  ClipboardSelectionMode,
+  ConditionalFormatRule,
+  SpreadsheetTableMeta,
+} from "@/types/spreadsheet-types";
 import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import { useHyperFormula } from "@/hooks/use-hyperformula";
 import { validateCellValue, isCellEditable } from "@/utils/validation-utils";
@@ -10,6 +16,13 @@ import { letterToColIndex } from "@/utils/cell-address";
 import { CellEditorSwitch } from "./cell-editor-switch";
 
 const TREE_INDENT_PX = 20;
+
+interface CellOutline {
+  top: boolean;
+  right: boolean;
+  bottom: boolean;
+  left: boolean;
+}
 
 interface CellRendererProps {
   cell: Cell<Record<string, CellValue>, unknown>;
@@ -27,6 +40,82 @@ interface CellRendererProps {
   onNavigate?: (fromRow: number, fromColumnId: string, direction: "up" | "down" | "left" | "right") => void;
   /** Conditional formatting rules evaluated per-cell */
   conditionalFormats?: ConditionalFormatRule[];
+  selectionOutline?: CellOutline | null;
+  clipboardOutline?: CellOutline | null;
+  clipboardMode?: ClipboardSelectionMode | null;
+}
+
+function renderSolidOutline(outline: CellOutline, color: string, zIndex: number) {
+  return (
+    <>
+      {outline.top && (
+        <div className="pointer-events-none absolute left-0 right-0 top-0 h-0.5" style={{ backgroundColor: color, zIndex }} />
+      )}
+      {outline.bottom && (
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-0.5" style={{ backgroundColor: color, zIndex }} />
+      )}
+      {outline.left && (
+        <div className="pointer-events-none absolute bottom-0 left-0 top-0 w-0.5" style={{ backgroundColor: color, zIndex }} />
+      )}
+      {outline.right && (
+        <div className="pointer-events-none absolute bottom-0 right-0 top-0 w-0.5" style={{ backgroundColor: color, zIndex }} />
+      )}
+    </>
+  );
+}
+
+function renderClipboardOutline(outline: CellOutline, mode: ClipboardSelectionMode) {
+  const borderColor = "var(--primary)";
+  const opacity = mode === "cut" ? 0.7 : 0.95;
+  // Clockwise marching ants: top→right, right→down, bottom→left(reverse), left→up(reverse)
+  return (
+    <>
+      {outline.top && (
+        <div
+          className="pointer-events-none absolute left-0 right-0 top-0 h-0.5"
+          style={{
+            zIndex: 6,
+            opacity,
+            backgroundImage: `repeating-linear-gradient(90deg, ${borderColor} 0 6px, transparent 6px 10px)`,
+            animation: "spreadsheet-marquee-x 0.6s linear infinite",
+          }}
+        />
+      )}
+      {outline.bottom && (
+        <div
+          className="pointer-events-none absolute bottom-0 left-0 right-0 h-0.5"
+          style={{
+            zIndex: 6,
+            opacity,
+            backgroundImage: `repeating-linear-gradient(90deg, ${borderColor} 0 6px, transparent 6px 10px)`,
+            animation: "spreadsheet-marquee-x 0.6s linear infinite reverse",
+          }}
+        />
+      )}
+      {outline.left && (
+        <div
+          className="pointer-events-none absolute bottom-0 left-0 top-0 w-0.5"
+          style={{
+            zIndex: 6,
+            opacity,
+            backgroundImage: `repeating-linear-gradient(180deg, ${borderColor} 0 6px, transparent 6px 10px)`,
+            animation: "spreadsheet-marquee-y 0.6s linear infinite reverse",
+          }}
+        />
+      )}
+      {outline.right && (
+        <div
+          className="pointer-events-none absolute bottom-0 right-0 top-0 w-0.5"
+          style={{
+            zIndex: 6,
+            opacity,
+            backgroundImage: `repeating-linear-gradient(180deg, ${borderColor} 0 6px, transparent 6px 10px)`,
+            animation: "spreadsheet-marquee-y 0.6s linear infinite",
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 export const CellRenderer = memo(function CellRenderer({
@@ -43,6 +132,9 @@ export const CellRenderer = memo(function CellRenderer({
   onCellMouseEnter,
   onNavigate,
   conditionalFormats,
+  selectionOutline,
+  clipboardOutline,
+  clipboardMode,
 }: CellRendererProps) {
   const commitRef = useRef(false);
   const navDirectionRef = useRef<"up" | "down" | "left" | "right" | null>(null);
@@ -293,9 +385,12 @@ export const CellRenderer = memo(function CellRenderer({
   if (mergedFormat.bgColor) formatStyle.backgroundColor = mergedFormat.bgColor;
   if (mergedFormat.align) formatStyle.justifyContent = mergedFormat.align === "center" ? "center" : mergedFormat.align === "right" ? "flex-end" : "flex-start";
 
+  const showSelectionOverlay = isSelected && !isRowNumberCol && !isActive;
+  // Only show the ring on the active cell when there's no multi-cell selection outline.
+  // When a range is selected, the selection outline covers the entire range boundary.
+  const showActiveRing = isActive && !isRowNumberCol && !selectionOutline;
   const selectionClasses = [
-    isActive && !isRowNumberCol ? "ring-2 ring-primary ring-inset z-[2]" : "",
-    isSelected && !isActive && !isRowNumberCol ? "bg-primary/10" : "",
+    showActiveRing ? "ring-2 ring-primary ring-inset z-[5]" : "",
   ]
     .filter(Boolean)
     .join(" ");
@@ -311,9 +406,9 @@ export const CellRenderer = memo(function CellRenderer({
       } ${isAggregated ? "text-muted-foreground italic" : ""} ${
         editable && !isRowNumberCol ? "cursor-cell" : ""
       } ${hasFormulaError ? "text-destructive" : ""} ${selectionClasses}`}
-      style={{
-        width,
-        height,
+        style={{
+          width,
+          height,
         transform: `translateX(${translateX}px)`,
         paddingLeft: indentPx > 0 ? `${indentPx + 8}px` : undefined,
         ...formatStyle,
@@ -322,10 +417,16 @@ export const CellRenderer = memo(function CellRenderer({
       onDoubleClick={handleDoubleClick}
       onMouseDown={handleMouseDown}
       onMouseEnter={handleMouseEnter}
-      >
-        {formulaReferenceColor && !isRowNumberCol && (
-          <div
-            className="pointer-events-none absolute inset-[2px] z-[3] rounded-[3px] border-2 border-dashed"
+        >
+          {showSelectionOverlay && (
+            <div className="pointer-events-none absolute inset-0 z-[1] bg-primary/10" />
+          )}
+          {selectionOutline && !isRowNumberCol && renderSolidOutline(selectionOutline, "var(--primary)", 4)}
+          {clipboardOutline && clipboardMode && !isRowNumberCol && renderClipboardOutline(clipboardOutline, clipboardMode)}
+
+          {formulaReferenceColor && !isRowNumberCol && (
+            <div
+              className="pointer-events-none absolute inset-[2px] z-[3] rounded-[3px] border-2 border-dashed"
             style={{ borderColor: formulaReferenceColor }}
           />
         )}

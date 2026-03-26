@@ -49,6 +49,24 @@ body {
   min-height: 100vh;
 }
 
+@keyframes spreadsheet-marquee-x {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 10px 0;
+  }
+}
+
+@keyframes spreadsheet-marquee-y {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 10px;
+  }
+}
+
 @theme inline {
   --font-heading: var(--font-sans);
   --font-sans: 'Geist Variable', sans-serif;

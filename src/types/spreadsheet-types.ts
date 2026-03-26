@@ -51,6 +51,9 @@ export interface SelectionRange {
   end: CellAddress;
 }
 
+/** Clipboard marquee state for copied/cut ranges. */
+export type ClipboardSelectionMode = "copy" | "cut";
+
 /** Pin position for a column. */
 export type PinPosition = "left" | "right" | false;
 
@@ -250,6 +253,8 @@ export interface SpreadsheetUIState {
   globalFilter: string;
   columnOrder: string[];
   columnResizePreview: Record<string, number>;
+  clipboardSelection: SelectionRange | null;
+  clipboardSelectionMode: ClipboardSelectionMode | null;
   columnPinning: ColumnPinningState;
   columnVisibility: VisibilityState;
   rowSelection: RowSelectionState;
@@ -279,6 +284,10 @@ export interface SpreadsheetUIActions {
   setColumns: (columns: SpreadsheetColumnConfig[]) => void;
   setColumnOrder: (order: string[]) => void;
   setColumnResizePreview: (columnId: string, width: number | null) => void;
+  setClipboardSelection: (
+    range: SelectionRange | null,
+    mode: ClipboardSelectionMode | null,
+  ) => void;
   setColumnPinning: (pinning: ColumnPinningState) => void;
   setColumnVisibility: (visibility: VisibilityState) => void;
   pinColumn: (columnId: string, position: PinPosition) => void;

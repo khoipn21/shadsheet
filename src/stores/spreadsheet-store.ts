@@ -33,6 +33,8 @@ export const createSpreadsheetStore = (
       globalFilter: "",
       columnOrder: [],
       columnResizePreview: {},
+      clipboardSelection: null,
+      clipboardSelectionMode: null,
       columnPinning: { left: [], right: [] },
       columnVisibility: {},
       // Row features (Phase 3)
@@ -128,6 +130,12 @@ export const createSpreadsheetStore = (
             return;
           }
           state.columnResizePreview[columnId] = width;
+        }),
+
+      setClipboardSelection: (range, mode) =>
+        set((state) => {
+          state.clipboardSelection = range;
+          state.clipboardSelectionMode = range ? mode : null;
         }),
 
       setColumnPinning: (pinning: ColumnPinningState) =>

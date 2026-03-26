@@ -12,7 +12,14 @@ import { useCellSelection } from "@/hooks/use-cell-selection";
 import { useClipboard } from "@/hooks/use-clipboard";
 import { useAutoFill } from "@/hooks/use-auto-fill";
 import { useGridOperations } from "@/hooks/use-grid-operations";
-import type { CellValue, ConditionalFormatRule, SpreadsheetTableMeta, SpreadsheetColumnConfig } from "@/types/spreadsheet-types";
+import type {
+  CellValue,
+  ClipboardSelectionMode,
+  ConditionalFormatRule,
+  SelectionRange,
+  SpreadsheetColumnConfig,
+  SpreadsheetTableMeta,
+} from "@/types/spreadsheet-types";
 import { letterToColIndex } from "@/utils/cell-address";
 import { getCellRawValue } from "@/utils/formula-utils";
 import {
@@ -26,6 +33,13 @@ const ROW_HEIGHT = 35;
 const DEFAULT_COL_WIDTH = 120;
 const ROW_OVERSCAN = 10;
 const COL_OVERSCAN = 2;
+
+interface CellOutline {
+  top: boolean;
+  right: boolean;
+  bottom: boolean;
+  left: boolean;
+}
 
 interface SpreadsheetGridProps {
   className?: string;
@@ -56,6 +70,8 @@ export function SpreadsheetGrid({
   const gridGlobalFilter = useSpreadsheetStore((s) => s.globalFilter);
   const gridColumnOrder = useSpreadsheetStore((s) => s.columnOrder);
   const gridColumnResizePreview = useSpreadsheetStore((s) => s.columnResizePreview);
+  const clipboardSelection = useSpreadsheetStore((s) => s.clipboardSelection);
+  const clipboardSelectionMode = useSpreadsheetStore((s) => s.clipboardSelectionMode);
   const gridColumnPinning = useSpreadsheetStore((s) => s.columnPinning);
   const gridColumnVisibility = useSpreadsheetStore((s) => s.columnVisibility);
   const gridRowSelection = useSpreadsheetStore((s) => s.rowSelection);
@@ -298,19 +314,47 @@ export function SpreadsheetGrid({
     incrementRenderTrigger,
   });
 
-  // Combined keyboard handler: navigation + clipboard shortcuts
+  const handleGridCellMouseDown = useCallback(
+    (rowIndex: number, columnId: string, shiftKey: boolean) => {
+      gridRef.current?.focus({ preventScroll: true });
+      handleCellMouseDown(rowIndex, columnId, shiftKey);
+    },
+    [handleCellMouseDown],
+  );
+
+  // Keyboard handler: navigation/editing only. Clipboard uses native copy/cut/paste events.
   const handleGridKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
-      const ctrl = e.ctrlKey || e.metaKey;
-      // Clipboard shortcuts (work in both edit and non-edit mode for grid-level handler)
-      if (!editingCell && ctrl) {
-        if (e.key === "c") { e.preventDefault(); handleCopy(); return; }
-        if (e.key === "x") { e.preventDefault(); handleCut(); return; }
-        if (e.key === "v") { e.preventDefault(); handlePaste(); return; }
-      }
       handleKeyDown(e);
     },
-    [editingCell, handleKeyDown, handleCopy, handleCut, handlePaste],
+    [handleKeyDown],
+  );
+
+  const handleGridCopy = useCallback(
+    (e: React.ClipboardEvent) => {
+      if (editingCell || (!activeCell && !selectionRange)) return;
+      e.preventDefault();
+      void handleCopy(e.clipboardData);
+    },
+    [activeCell, editingCell, handleCopy, selectionRange],
+  );
+
+  const handleGridCut = useCallback(
+    (e: React.ClipboardEvent) => {
+      if (editingCell || (!activeCell && !selectionRange)) return;
+      e.preventDefault();
+      void handleCut(e.clipboardData);
+    },
+    [activeCell, editingCell, handleCut, selectionRange],
+  );
+
+  const handleGridPaste = useCallback(
+    (e: React.ClipboardEvent) => {
+      if (editingCell || !activeCell) return;
+      e.preventDefault();
+      void handlePaste(e.clipboardData.getData("text/plain"));
+    },
+    [activeCell, editingCell, handlePaste],
   );
 
   // Right-click context menu handler
@@ -391,6 +435,45 @@ export function SpreadsheetGrid({
     [selectionRange, columnIdToIndex],
   );
 
+  const getRangeOutline = useCallback(
+    (range: SelectionRange | null, rowIndex: number, columnId: string): CellOutline | null => {
+      if (!range) return null;
+      const { start, end } = range;
+      const sc = columnIdToIndex.get(start.columnId);
+      const ec = columnIdToIndex.get(end.columnId);
+      const cc = columnIdToIndex.get(columnId);
+      if (sc == null || ec == null || cc == null) return null;
+
+      const minRow = Math.min(start.rowIndex, end.rowIndex);
+      const maxRow = Math.max(start.rowIndex, end.rowIndex);
+      const minCol = Math.min(sc, ec);
+      const maxCol = Math.max(sc, ec);
+
+      if (rowIndex < minRow || rowIndex > maxRow || cc < minCol || cc > maxCol) {
+        return null;
+      }
+
+      return {
+        top: rowIndex === minRow,
+        right: cc === maxCol,
+        bottom: rowIndex === maxRow,
+        left: cc === minCol,
+      };
+    },
+    [columnIdToIndex],
+  );
+
+  const getSelectionOutline = useCallback(
+    (rowIndex: number, columnId: string) => getRangeOutline(selectionRange, rowIndex, columnId),
+    [getRangeOutline, selectionRange],
+  );
+
+  const getClipboardOutline = useCallback(
+    (rowIndex: number, columnId: string) =>
+      getRangeOutline(clipboardSelection, rowIndex, columnId),
+    [clipboardSelection, getRangeOutline],
+  );
+
     const isCellActive = useCallback(
       (rowIndex: number, columnId: string): boolean =>
         activeCell?.rowIndex === rowIndex && activeCell?.columnId === columnId,
@@ -441,6 +524,9 @@ export function SpreadsheetGrid({
       tabIndex={0}
       role="grid"
       onKeyDown={handleGridKeyDown}
+      onCopy={handleGridCopy}
+      onCut={handleGridCut}
+      onPaste={handleGridPaste}
       onMouseUp={(e) => { handleMouseUp(); handleFillEnd(); void e; }}
       onContextMenu={handleContextMenu}
     >
@@ -455,12 +541,15 @@ export function SpreadsheetGrid({
             hasRightPinned={hasRightPinned}
           leftWidth={leftWidth}
           rightWidth={rightWidth}
-          label="pinned-top"
-          isCellActive={isCellActive}
-          isCellSelected={isCellSelected}
-            onCellMouseDown={handleCellMouseDown}
-            onCellMouseEnter={handleCellMouseEnter}
-            getFormulaReferenceColor={getFormulaReferenceColor}
+            label="pinned-top"
+            isCellActive={isCellActive}
+            isCellSelected={isCellSelected}
+            getSelectionOutline={getSelectionOutline}
+            getClipboardOutline={getClipboardOutline}
+            clipboardMode={clipboardSelectionMode}
+              onCellMouseDown={handleGridCellMouseDown}
+              onCellMouseEnter={handleCellMouseEnter}
+              getFormulaReferenceColor={getFormulaReferenceColor}
             onNavigate={handleNavigate}
           />
       )}
@@ -482,9 +571,12 @@ export function SpreadsheetGrid({
                 columnResizePreview={gridColumnResizePreview}
                 isCellActive={isCellActive}
                 isCellSelected={isCellSelected}
-                  onCellMouseDown={handleCellMouseDown}
-                onCellMouseEnter={handleCellMouseEnter}
-                getFormulaReferenceColor={getFormulaReferenceColor}
+                getSelectionOutline={getSelectionOutline}
+                getClipboardOutline={getClipboardOutline}
+                clipboardMode={clipboardSelectionMode}
+                          onCellMouseDown={handleGridCellMouseDown}
+                  onCellMouseEnter={handleCellMouseEnter}
+                  getFormulaReferenceColor={getFormulaReferenceColor}
                 onNavigate={handleNavigate}
               />
           )}
@@ -518,12 +610,15 @@ export function SpreadsheetGrid({
                           width={gridColumnResizePreview[cId] ?? virtualCol.size}
                           height={virtualRow.size}
                           translateX={virtualCol.start}
-                        isActive={isCellActive(rIdx, cId)}
-                          isSelected={isCellSelected(rIdx, cId)}
-                          rowSelected={isRowSelected}
-                          rowExpanded={row.getIsExpanded()}
-                          formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
-                          onCellMouseDown={handleCellMouseDown}
+                          isActive={isCellActive(rIdx, cId)}
+                            isSelected={isCellSelected(rIdx, cId)}
+                            selectionOutline={getSelectionOutline(rIdx, cId)}
+                            clipboardOutline={getClipboardOutline(rIdx, cId)}
+                            clipboardMode={clipboardSelectionMode}
+                            rowSelected={isRowSelected}
+                            rowExpanded={row.getIsExpanded()}
+                            formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                          onCellMouseDown={handleGridCellMouseDown}
                           onCellMouseEnter={handleCellMouseEnter}
                           onNavigate={handleNavigate}
                         conditionalFormats={conditionalFormats}
@@ -566,9 +661,12 @@ export function SpreadsheetGrid({
                 columnResizePreview={gridColumnResizePreview}
                 isCellActive={isCellActive}
                 isCellSelected={isCellSelected}
-                onCellMouseDown={handleCellMouseDown}
+                getSelectionOutline={getSelectionOutline}
+                getClipboardOutline={getClipboardOutline}
+                clipboardMode={clipboardSelectionMode}
+                onCellMouseDown={handleGridCellMouseDown}
                 onCellMouseEnter={handleCellMouseEnter}
-                getFormulaReferenceColor={getFormulaReferenceColor}
+                  getFormulaReferenceColor={getFormulaReferenceColor}
                 onNavigate={handleNavigate}
               />
           )}
@@ -586,12 +684,15 @@ export function SpreadsheetGrid({
             hasRightPinned={hasRightPinned}
             leftWidth={leftWidth}
           rightWidth={rightWidth}
-          label="pinned-bottom"
-          isCellActive={isCellActive}
-          isCellSelected={isCellSelected}
-            onCellMouseDown={handleCellMouseDown}
+            label="pinned-bottom"
+            isCellActive={isCellActive}
+            isCellSelected={isCellSelected}
+            getSelectionOutline={getSelectionOutline}
+            getClipboardOutline={getClipboardOutline}
+            clipboardMode={clipboardSelectionMode}
+            onCellMouseDown={handleGridCellMouseDown}
             onCellMouseEnter={handleCellMouseEnter}
-            getFormulaReferenceColor={getFormulaReferenceColor}
+              getFormulaReferenceColor={getFormulaReferenceColor}
             onNavigate={handleNavigate}
           />
       )}
@@ -625,6 +726,9 @@ export function SpreadsheetGrid({
 interface SelectionCallbacks {
   isCellActive: (rowIndex: number, columnId: string) => boolean;
   isCellSelected: (rowIndex: number, columnId: string) => boolean;
+  getSelectionOutline: (rowIndex: number, columnId: string) => CellOutline | null;
+  getClipboardOutline: (rowIndex: number, columnId: string) => CellOutline | null;
+  clipboardMode: ClipboardSelectionMode | null;
   onCellMouseDown: (rowIndex: number, columnId: string, shiftKey: boolean) => void;
   onCellMouseEnter: (rowIndex: number, columnId: string) => void;
   getFormulaReferenceColor: (
@@ -644,6 +748,9 @@ function PinnedPane({
   columnResizePreview,
   isCellActive,
   isCellSelected,
+  getSelectionOutline,
+  getClipboardOutline,
+  clipboardMode,
   onCellMouseDown,
   onCellMouseEnter,
   getFormulaReferenceColor,
@@ -687,14 +794,17 @@ function PinnedPane({
                   <CellRenderer
                     key={cell.id}
                     cell={cell as Cell<Record<string, CellValue>, unknown>}
-                    width={width}
-                    height={virtualRow.size}
-                    translateX={translateX}
-                      isActive={isCellActive(rIdx, cId)}
-                      isSelected={isCellSelected(rIdx, cId)}
-                      rowSelected={isSelected}
-                      rowExpanded={row.getIsExpanded()}
-                      formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                      width={width}
+                      height={virtualRow.size}
+                      translateX={translateX}
+                        isActive={isCellActive(rIdx, cId)}
+                        isSelected={isCellSelected(rIdx, cId)}
+                        selectionOutline={getSelectionOutline(rIdx, cId)}
+                        clipboardOutline={getClipboardOutline(rIdx, cId)}
+                        clipboardMode={clipboardMode}
+                        rowSelected={isSelected}
+                        rowExpanded={row.getIsExpanded()}
+                        formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
                       onCellMouseDown={onCellMouseDown}
                       onCellMouseEnter={onCellMouseEnter}
                       onNavigate={onNavigate}
@@ -721,6 +831,9 @@ function FixedRowBand({
   label,
   isCellActive,
   isCellSelected,
+  getSelectionOutline,
+  getClipboardOutline,
+  clipboardMode,
   onCellMouseDown,
   onCellMouseEnter,
   getFormulaReferenceColor,
@@ -765,14 +878,17 @@ function FixedRowBand({
                       <CellRenderer
                         key={cell.id}
                         cell={cell as Cell<Record<string, CellValue>, unknown>}
-                        width={width}
-                        height={ROW_HEIGHT}
-                        translateX={translateX}
-                          isActive={isCellActive(rIdx, cId)}
-                          isSelected={isCellSelected(rIdx, cId)}
-                          rowSelected={row.getIsSelected()}
-                          rowExpanded={row.getIsExpanded()}
-                          formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                          width={width}
+                          height={ROW_HEIGHT}
+                          translateX={translateX}
+                            isActive={isCellActive(rIdx, cId)}
+                            isSelected={isCellSelected(rIdx, cId)}
+                            selectionOutline={getSelectionOutline(rIdx, cId)}
+                            clipboardOutline={getClipboardOutline(rIdx, cId)}
+                            clipboardMode={clipboardMode}
+                            rowSelected={row.getIsSelected()}
+                            rowExpanded={row.getIsExpanded()}
+                            formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
                           onCellMouseDown={onCellMouseDown}
                           onCellMouseEnter={onCellMouseEnter}
                           onNavigate={onNavigate}
@@ -802,14 +918,17 @@ function FixedRowBand({
                       <CellRenderer
                         key={cell.id}
                         cell={cell as Cell<Record<string, CellValue>, unknown>}
-                        width={width}
-                        height={ROW_HEIGHT}
-                        translateX={translateX}
-                          isActive={isCellActive(rIdx, cId)}
-                          isSelected={isCellSelected(rIdx, cId)}
-                          rowSelected={row.getIsSelected()}
-                          rowExpanded={row.getIsExpanded()}
-                          formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                          width={width}
+                          height={ROW_HEIGHT}
+                          translateX={translateX}
+                            isActive={isCellActive(rIdx, cId)}
+                            isSelected={isCellSelected(rIdx, cId)}
+                            selectionOutline={getSelectionOutline(rIdx, cId)}
+                            clipboardOutline={getClipboardOutline(rIdx, cId)}
+                            clipboardMode={clipboardMode}
+                            rowSelected={row.getIsSelected()}
+                            rowExpanded={row.getIsExpanded()}
+                            formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
                           onCellMouseDown={onCellMouseDown}
                           onCellMouseEnter={onCellMouseEnter}
                           onNavigate={onNavigate}
@@ -839,14 +958,17 @@ function FixedRowBand({
                       <CellRenderer
                         key={cell.id}
                         cell={cell as Cell<Record<string, CellValue>, unknown>}
-                        width={width}
-                        height={ROW_HEIGHT}
-                        translateX={translateX}
-                          isActive={isCellActive(rIdx, cId)}
-                          isSelected={isCellSelected(rIdx, cId)}
-                          rowSelected={row.getIsSelected()}
-                          rowExpanded={row.getIsExpanded()}
-                          formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                          width={width}
+                          height={ROW_HEIGHT}
+                          translateX={translateX}
+                            isActive={isCellActive(rIdx, cId)}
+                            isSelected={isCellSelected(rIdx, cId)}
+                            selectionOutline={getSelectionOutline(rIdx, cId)}
+                            clipboardOutline={getClipboardOutline(rIdx, cId)}
+                            clipboardMode={clipboardMode}
+                            rowSelected={row.getIsSelected()}
+                            rowExpanded={row.getIsExpanded()}
+                            formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
                           onCellMouseDown={onCellMouseDown}
                           onCellMouseEnter={onCellMouseEnter}
                           onNavigate={onNavigate}
