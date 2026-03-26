@@ -1,4 +1,4 @@
-import { useContext, useRef, useCallback, useMemo } from "react";
+import { useContext, useRef, useCallback, useMemo, useEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { TableContext } from "./spreadsheet-provider";
 import { ColumnHeaders } from "./column-headers";
@@ -24,15 +24,36 @@ const COL_OVERSCAN = 2;
 interface SpreadsheetGridProps {
   className?: string;
   conditionalFormats?: ConditionalFormatRule[];
+  apiRef?: React.MutableRefObject<SpreadsheetGridApi | null>;
 }
 
-export function SpreadsheetGrid({ className, conditionalFormats }: SpreadsheetGridProps) {
+export interface SpreadsheetGridApi {
+  focus: () => void;
+  scrollToCell: (rowIndex: number, column: number | string) => void;
+  getVisibleColumnIds: () => string[];
+}
+
+export function SpreadsheetGrid({
+  className,
+  conditionalFormats,
+  apiRef,
+}: SpreadsheetGridProps) {
   const table = useContext(TableContext);
   if (!table) throw new Error("SpreadsheetGrid must be used within SpreadsheetProvider");
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const gridRef = useRef<HTMLDivElement>(null);
   const hf = useHyperFormula();
+  const gridColumns = useSpreadsheetStore((s) => s.columns);
+  const gridSorting = useSpreadsheetStore((s) => s.sorting);
+  const gridColumnFilters = useSpreadsheetStore((s) => s.columnFilters);
+  const gridGlobalFilter = useSpreadsheetStore((s) => s.globalFilter);
+  const gridColumnOrder = useSpreadsheetStore((s) => s.columnOrder);
+  const gridColumnPinning = useSpreadsheetStore((s) => s.columnPinning);
+  const gridColumnVisibility = useSpreadsheetStore((s) => s.columnVisibility);
+  const gridRowSelection = useSpreadsheetStore((s) => s.rowSelection);
+  const gridExpanded = useSpreadsheetStore((s) => s.expanded);
+  const gridGrouping = useSpreadsheetStore((s) => s.grouping);
   const incrementRenderTrigger = useSpreadsheetStore((s) => s.incrementRenderTrigger);
   const rowPinning = useSpreadsheetStore((s) => s.rowPinning);
   const activeCell = useSpreadsheetStore((s) => s.activeCell);
@@ -45,6 +66,16 @@ export function SpreadsheetGrid({ className, conditionalFormats }: SpreadsheetGr
   const setContextMenu = useSpreadsheetStore((s) => s.setContextMenu);
   const setSorting = useSpreadsheetStore((s) => s.setSorting);
   const { insertRow, deleteRow, insertColumn, deleteColumn } = useGridOperations();
+  void gridColumns;
+  void gridSorting;
+  void gridColumnFilters;
+  void gridGlobalFilter;
+  void gridColumnOrder;
+  void gridColumnPinning;
+  void gridColumnVisibility;
+  void gridRowSelection;
+  void gridExpanded;
+  void gridGrouping;
 
   const meta = table.options.meta as SpreadsheetTableMeta | undefined;
   const allRows = table.getRowModel().rows;
@@ -300,6 +331,37 @@ export function SpreadsheetGrid({ className, conditionalFormats }: SpreadsheetGr
     [activeCell],
   );
 
+  useEffect(() => {
+    if (!apiRef) return;
+
+    apiRef.current = {
+      focus: () => {
+        gridRef.current?.focus();
+      },
+      scrollToCell: (rowIndex: number, column: number | string) => {
+        rowVirtualizer.scrollToIndex(Math.max(0, rowIndex), { align: "auto" });
+
+        const targetColumnId =
+          typeof column === "number" ? visibleColumnIds[column] : column;
+        if (!targetColumnId) return;
+
+        const centerColumnIndex = centerColumns.findIndex(
+          (centerColumn) => centerColumn.id === targetColumnId,
+        );
+        if (centerColumnIndex !== -1) {
+          colVirtualizer.scrollToIndex(centerColumnIndex, { align: "auto" });
+        }
+
+        gridRef.current?.focus();
+      },
+      getVisibleColumnIds: () => visibleColumnIds,
+    };
+
+    return () => {
+      apiRef.current = null;
+    };
+  }, [apiRef, centerColumns, colVirtualizer, rowVirtualizer, visibleColumnIds]);
+
   return (
     <div
       ref={gridRef}
@@ -382,6 +444,8 @@ export function SpreadsheetGrid({ className, conditionalFormats }: SpreadsheetGr
                         translateX={virtualCol.start}
                         isActive={isCellActive(rIdx, cId)}
                         isSelected={isCellSelected(rIdx, cId)}
+                        rowSelected={isRowSelected}
+                        rowExpanded={row.getIsExpanded()}
                         onCellMouseDown={handleCellMouseDown}
                         onCellMouseEnter={handleCellMouseEnter}
                         onNavigate={handleNavigate}
@@ -530,18 +594,20 @@ function PinnedPane({
               offset += width;
               const cId = cell.column.id;
               const rIdx = cell.row.index;
-              return (
-                <CellRenderer
-                  key={cell.id}
-                  cell={cell as Cell<Record<string, CellValue>, unknown>}
-                  width={width}
-                  height={virtualRow.size}
-                  translateX={translateX}
-                  isActive={isCellActive(rIdx, cId)}
-                  isSelected={isCellSelected(rIdx, cId)}
-                  onCellMouseDown={onCellMouseDown}
-                  onCellMouseEnter={onCellMouseEnter}
-                  onNavigate={onNavigate}
+                return (
+                  <CellRenderer
+                    key={cell.id}
+                    cell={cell as Cell<Record<string, CellValue>, unknown>}
+                    width={width}
+                    height={virtualRow.size}
+                    translateX={translateX}
+                    isActive={isCellActive(rIdx, cId)}
+                    isSelected={isCellSelected(rIdx, cId)}
+                    rowSelected={isSelected}
+                    rowExpanded={row.getIsExpanded()}
+                    onCellMouseDown={onCellMouseDown}
+                    onCellMouseEnter={onCellMouseEnter}
+                    onNavigate={onNavigate}
                 />
               );
             })}
@@ -598,18 +664,20 @@ function FixedRowBand({
                   offset += width;
                   const cId = cell.column.id;
                   const rIdx = cell.row.index;
-                  return (
-                    <CellRenderer
-                      key={cell.id}
-                      cell={cell as Cell<Record<string, CellValue>, unknown>}
-                      width={width}
-                      height={ROW_HEIGHT}
-                      translateX={translateX}
-                      isActive={isCellActive(rIdx, cId)}
-                      isSelected={isCellSelected(rIdx, cId)}
-                      onCellMouseDown={onCellMouseDown}
-                      onCellMouseEnter={onCellMouseEnter}
-                      onNavigate={onNavigate}
+                    return (
+                      <CellRenderer
+                        key={cell.id}
+                        cell={cell as Cell<Record<string, CellValue>, unknown>}
+                        width={width}
+                        height={ROW_HEIGHT}
+                        translateX={translateX}
+                        isActive={isCellActive(rIdx, cId)}
+                        isSelected={isCellSelected(rIdx, cId)}
+                        rowSelected={row.getIsSelected()}
+                        rowExpanded={row.getIsExpanded()}
+                        onCellMouseDown={onCellMouseDown}
+                        onCellMouseEnter={onCellMouseEnter}
+                        onNavigate={onNavigate}
                     />
                   );
                 })}
@@ -631,18 +699,20 @@ function FixedRowBand({
                 offset += width;
                 const cId = cell.column.id;
                 const rIdx = cell.row.index;
-                return (
-                  <CellRenderer
-                    key={cell.id}
-                    cell={cell as Cell<Record<string, CellValue>, unknown>}
-                    width={width}
-                    height={ROW_HEIGHT}
-                    translateX={translateX}
-                    isActive={isCellActive(rIdx, cId)}
-                    isSelected={isCellSelected(rIdx, cId)}
-                    onCellMouseDown={onCellMouseDown}
-                    onCellMouseEnter={onCellMouseEnter}
-                    onNavigate={onNavigate}
+                    return (
+                      <CellRenderer
+                        key={cell.id}
+                        cell={cell as Cell<Record<string, CellValue>, unknown>}
+                        width={width}
+                        height={ROW_HEIGHT}
+                        translateX={translateX}
+                        isActive={isCellActive(rIdx, cId)}
+                        isSelected={isCellSelected(rIdx, cId)}
+                        rowSelected={row.getIsSelected()}
+                        rowExpanded={row.getIsExpanded()}
+                        onCellMouseDown={onCellMouseDown}
+                        onCellMouseEnter={onCellMouseEnter}
+                        onNavigate={onNavigate}
                   />
                 );
               })}
@@ -664,18 +734,20 @@ function FixedRowBand({
                   offset += width;
                   const cId = cell.column.id;
                   const rIdx = cell.row.index;
-                  return (
-                    <CellRenderer
-                      key={cell.id}
-                      cell={cell as Cell<Record<string, CellValue>, unknown>}
-                      width={width}
-                      height={ROW_HEIGHT}
-                      translateX={translateX}
-                      isActive={isCellActive(rIdx, cId)}
-                      isSelected={isCellSelected(rIdx, cId)}
-                      onCellMouseDown={onCellMouseDown}
-                      onCellMouseEnter={onCellMouseEnter}
-                      onNavigate={onNavigate}
+                    return (
+                      <CellRenderer
+                        key={cell.id}
+                        cell={cell as Cell<Record<string, CellValue>, unknown>}
+                        width={width}
+                        height={ROW_HEIGHT}
+                        translateX={translateX}
+                        isActive={isCellActive(rIdx, cId)}
+                        isSelected={isCellSelected(rIdx, cId)}
+                        rowSelected={row.getIsSelected()}
+                        rowExpanded={row.getIsExpanded()}
+                        onCellMouseDown={onCellMouseDown}
+                        onCellMouseEnter={onCellMouseEnter}
+                        onNavigate={onNavigate}
                     />
                   );
                 })}

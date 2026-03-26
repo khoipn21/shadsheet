@@ -8,7 +8,6 @@ export function TextEditor({ value, onChange, onCommit, onCancel }: CellEditorPr
     const input = inputRef.current;
     if (!input) return;
     input.focus();
-    input.select();
   }, []);
 
   const handleKeyDown = useCallback(

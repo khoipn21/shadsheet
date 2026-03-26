@@ -109,17 +109,17 @@ export function useClipboard({
     if (!bounds) return;
     const { minRow, maxRow, minCol, maxCol } = bounds;
 
-    if (hf) hf.suspendEvaluation();
-    for (let r = minRow; r <= maxRow; r++) {
-      for (let c = minCol; c <= maxCol; c++) {
-        const colId = visibleColumnIds[c];
-        if (!canEditCell(r, colId)) continue;
-        if (hf) {
-          hf.setCellContents({ sheet: 0, row: r, col: letterToColIndex(colId) }, [[null]]);
+      if (hf) hf.suspendEvaluation();
+      for (let r = minRow; r <= maxRow; r++) {
+        for (let c = minCol; c <= maxCol; c++) {
+          const colId = visibleColumnIds[c];
+          if (!canEditCell(r, colId)) continue;
+          if (meta?.updateData(r, colId, null) === false) continue;
+          if (hf) {
+            hf.setCellContents({ sheet: 0, row: r, col: letterToColIndex(colId) }, [[null]]);
+          }
         }
-        meta?.updateData(r, colId, null);
       }
-    }
     if (hf) {
       hf.resumeEvaluation();
       incrementRenderTrigger();
@@ -146,18 +146,18 @@ export function useClipboard({
     for (let r = 0; r < rows.length; r++) {
       const targetRow = startRow + r;
       if (targetRow >= totalRowCount) break;
-      for (let c = 0; c < rows[r].length; c++) {
-        const targetCol = startCol + c;
-        if (targetCol >= visibleColumnIds.length) break;
-        const colId = visibleColumnIds[targetCol];
-        if (!canEditCell(targetRow, colId)) continue;
-        const val = rows[r][c];
-        if (hf) {
-          hf.setCellContents({ sheet: 0, row: targetRow, col: letterToColIndex(colId) }, [[val]]);
+        for (let c = 0; c < rows[r].length; c++) {
+          const targetCol = startCol + c;
+          if (targetCol >= visibleColumnIds.length) break;
+          const colId = visibleColumnIds[targetCol];
+          if (!canEditCell(targetRow, colId)) continue;
+          const val = rows[r][c];
+          if (meta?.updateData(targetRow, colId, val) === false) continue;
+          if (hf) {
+            hf.setCellContents({ sheet: 0, row: targetRow, col: letterToColIndex(colId) }, [[val]]);
+          }
         }
-        meta?.updateData(targetRow, colId, val);
       }
-    }
     if (hf) {
       hf.resumeEvaluation();
       incrementRenderTrigger();

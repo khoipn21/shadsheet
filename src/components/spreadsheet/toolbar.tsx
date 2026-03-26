@@ -14,12 +14,23 @@ import {
 import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import { useHyperFormula } from "@/hooks/use-hyperformula";
 import { exportToCSV, exportToXLSX } from "@/utils/export-utils";
-import type { TextAlignment, SpreadsheetColumnConfig } from "@/types/spreadsheet-types";
+import type {
+  SpreadsheetColumnConfig,
+  SpreadsheetExportFormat,
+  TextAlignment,
+} from "@/types/spreadsheet-types";
 import type { VisibilityState } from "@tanstack/react-table";
 import { letterToColIndex, colIndexToLetter } from "@/utils/cell-address";
 
 interface ToolbarProps {
   columns: SpreadsheetColumnConfig[];
+  exportFileName?: string;
+  onExport?: (format: SpreadsheetExportFormat) => void;
+}
+
+function getExportFileName(baseName: string | undefined, format: SpreadsheetExportFormat) {
+  const sanitizedBase = (baseName ?? "spreadsheet").replace(/\.(csv|xlsx)$/i, "");
+  return `${sanitizedBase}.${format}`;
 }
 
 /** Build cell format keys ("row-col") for all cells in current selection */
@@ -51,7 +62,7 @@ function useSelectedCellKeys(): string[] {
   return [];
 }
 
-export function Toolbar({ columns }: ToolbarProps) {
+export function Toolbar({ columns, exportFileName, onExport }: ToolbarProps) {
   const hf = useHyperFormula();
   const incrementRenderTrigger = useSpreadsheetStore((s) => s.incrementRenderTrigger);
   const columnVisibility = useSpreadsheetStore((s) => s.columnVisibility) as VisibilityState;
@@ -104,15 +115,29 @@ export function Toolbar({ columns }: ToolbarProps) {
 
   const handleExportCSV = useCallback(() => {
     if (!hf) return;
-    exportToCSV(hf, 0, columns, columnVisibility);
+    exportToCSV(
+      hf,
+      0,
+      columns,
+      columnVisibility,
+      getExportFileName(exportFileName, "csv"),
+    );
+    onExport?.("csv");
     setShowExportMenu(false);
-  }, [hf, columns, columnVisibility]);
+  }, [hf, columns, columnVisibility, exportFileName, onExport]);
 
   const handleExportXLSX = useCallback(() => {
     if (!hf) return;
-    exportToXLSX(hf, 0, columns, columnVisibility);
+    void exportToXLSX(
+      hf,
+      0,
+      columns,
+      columnVisibility,
+      getExportFileName(exportFileName, "xlsx"),
+    );
+    onExport?.("xlsx");
     setShowExportMenu(false);
-  }, [hf, columns, columnVisibility]);
+  }, [hf, columns, columnVisibility, exportFileName, onExport]);
 
   const handleAlign = useCallback(
     (align: TextAlignment) => {

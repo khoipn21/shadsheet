@@ -1,6 +1,6 @@
 import { memo, useCallback, useRef } from "react";
 import { ChevronRight, ChevronDown } from "lucide-react";
-import type { Cell } from "@tanstack/react-table";
+import { flexRender, type Cell } from "@tanstack/react-table";
 import type { CellValue, CellFormat, ConditionalFormatRule, SpreadsheetTableMeta } from "@/types/spreadsheet-types";
 import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import { useHyperFormula } from "@/hooks/use-hyperformula";
@@ -18,6 +18,8 @@ interface CellRendererProps {
   translateX: number;
   isActive?: boolean;
   isSelected?: boolean;
+  rowSelected?: boolean;
+  rowExpanded?: boolean;
   onCellMouseDown?: (rowIndex: number, columnId: string, shiftKey: boolean) => void;
   onCellMouseEnter?: (rowIndex: number, columnId: string) => void;
   /** Called after successful commit with a navigation direction (Enter/Tab) */
@@ -33,6 +35,8 @@ export const CellRenderer = memo(function CellRenderer({
   translateX,
   isActive = false,
   isSelected = false,
+  rowSelected,
+  rowExpanded,
   onCellMouseDown,
   onCellMouseEnter,
   onNavigate,
@@ -60,8 +64,12 @@ export const CellRenderer = memo(function CellRenderer({
   const row = cell.row;
   const depth = row.depth;
   const canExpand = row.getCanExpand();
-  const isExpanded = row.getIsExpanded();
+  const currentRowSelected = rowSelected ?? row.getIsSelected();
+  const isExpanded = rowExpanded ?? row.getIsExpanded();
   const toggleExpanded = row.getToggleExpandedHandler();
+  const firstVisibleDataCell = row
+    .getVisibleCells()
+    .find((visibleCell) => visibleCell.column.id !== "_row_number");
 
   // Store selectors
   const editingCell = useSpreadsheetStore((s) => s.editingCell);
@@ -82,15 +90,37 @@ export const CellRenderer = memo(function CellRenderer({
   const manualFormat = useSpreadsheetStore((s) => s.cellFormats[formatKey]) as CellFormat | undefined;
 
   const isEditing = editingCell?.rowIndex === rowIndex && editingCell?.columnId === columnId;
-  const editable = isCellEditable(columnConfig, row.original);
+  const editable =
+    meta?.featureFlags.editable !== false &&
+    (meta?.featureFlags.onBeforeCellEdit?.({ rowIndex, columnId }, row.original) ?? true) &&
+    isCellEditable(columnConfig, row.original);
 
   // Show tree controls only in the first data column (skip _row_number)
-  const isFirstDataCol = !isRowNumberCol && cell.column.getIndex() <= 1;
+  const isFirstDataCol = !isRowNumberCol && columnId === firstVisibleDataCell?.column.id;
   const showTreeControls = (isFirstDataCol && depth > 0) || (isFirstDataCol && canExpand);
   const indentPx = isFirstDataCol ? depth * TREE_INDENT_PX : 0;
 
   const handleChevronClick = useCallback(
     (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    [],
+  );
+
+  const handleChevronMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleExpanded();
+    },
+    [toggleExpanded],
+  );
+
+  const handleChevronKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
       e.stopPropagation();
       toggleExpanded();
     },
@@ -105,7 +135,7 @@ export const CellRenderer = memo(function CellRenderer({
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       if (isRowNumberCol) return;
-      if ((e.target as HTMLElement).closest("button")) return;
+      if ((e.target as HTMLElement).closest("button,input,select,textarea,label")) return;
       onCellMouseDown?.(rowIndex, columnId, e.shiftKey);
     },
     [isRowNumberCol, onCellMouseDown, rowIndex, columnId],
@@ -124,6 +154,21 @@ export const CellRenderer = memo(function CellRenderer({
     [setEditValue, setValidationError],
   );
 
+  const handleBooleanToggle = useCallback(
+    (nextValue: boolean) => {
+      if (!editable || isRowNumberCol) return;
+
+      const accepted = meta?.updateData(rowIndex, columnId, nextValue) ?? true;
+      if (!accepted) return;
+
+      if (hf) {
+        hf.setCellContents({ sheet: 0, row: rowIndex, col: hfCol }, [[nextValue]]);
+        incrementRenderTrigger();
+      }
+    },
+    [editable, isRowNumberCol, meta, rowIndex, columnId, hf, hfCol, incrementRenderTrigger],
+  );
+
   const handleCommit = useCallback(() => {
     if (commitRef.current) return;
     commitRef.current = true;
@@ -140,13 +185,18 @@ export const CellRenderer = memo(function CellRenderer({
       }
     }
 
+    const accepted = meta?.updateData(rowIndex, columnId, finalValue) ?? true;
+    if (!accepted) {
+      commitRef.current = false;
+      navDirectionRef.current = null;
+      return;
+    }
+
     // Route through HyperFormula if available
     if (hf && !isRowNumberCol) {
       hf.setCellContents({ sheet: 0, row: rowIndex, col: hfCol }, [[finalValue]]);
       incrementRenderTrigger();
     }
-    // Also notify parent for external data sync
-    meta?.updateData(rowIndex, columnId, finalValue);
 
     setEditingCell(null);
     setEditValue(null);
@@ -249,11 +299,12 @@ export const CellRenderer = memo(function CellRenderer({
     .join(" ");
 
   return (
-    <div
-      role="gridcell"
-      tabIndex={isRowNumberCol ? undefined : -1}
-      data-col-id={columnId}
-      className={`absolute top-0 left-0 flex items-center border-r border-b border-border px-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm select-none ${
+      <div
+        role="gridcell"
+        tabIndex={isRowNumberCol ? undefined : -1}
+        data-col-id={columnId}
+        data-row-selected={currentRowSelected || undefined}
+        className={`absolute top-0 left-0 flex items-center border-r border-b border-border px-2 overflow-hidden text-ellipsis whitespace-nowrap text-sm select-none ${
         isGrouped ? "font-semibold bg-muted/40" : ""
       } ${isAggregated ? "text-muted-foreground italic" : ""} ${
         editable && !isRowNumberCol ? "cursor-cell" : ""
@@ -273,7 +324,9 @@ export const CellRenderer = memo(function CellRenderer({
       {showTreeControls && canExpand && (
         <button
           type="button"
+          onMouseDown={handleChevronMouseDown}
           onClick={handleChevronClick}
+          onKeyDown={handleChevronKeyDown}
           className="mr-1 flex-shrink-0 p-0.5 rounded hover:bg-muted cursor-pointer"
           aria-label={isExpanded ? "Collapse row" : "Expand row"}
         >
@@ -289,13 +342,18 @@ export const CellRenderer = memo(function CellRenderer({
         <span>
           {displayValue} ({row.subRows.length})
         </span>
+      ) : isRowNumberCol ? (
+        flexRender(cell.column.columnDef.cell, cell.getContext())
       ) : typeof value === "boolean" ? (
         <input
           type="checkbox"
-          className="h-4 w-4 pointer-events-none accent-primary"
+          className="h-4 w-4 accent-primary"
           checked={value}
-          readOnly
+          readOnly={!editable}
           tabIndex={-1}
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => handleBooleanToggle(e.target.checked)}
         />
       ) : (
         displayValue

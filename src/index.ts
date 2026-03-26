@@ -1,11 +1,21 @@
-export { SpreadsheetProvider } from "./components/spreadsheet/spreadsheet-provider";
-export { SpreadsheetGrid } from "./components/spreadsheet/spreadsheet-grid";
-export { GlobalSearchFilter } from "./components/spreadsheet/global-search-filter";
-export { useSpreadsheetStore } from "./hooks/use-spreadsheet-store";
+import "./index.css";
+
+export { Spreadsheet } from "./components/spreadsheet/spreadsheet";
 export type {
-  CellValue,
   CellAddress,
-  SelectionRange,
+  CellFormat,
+  CellValue,
+  ColumnConfig,
+  ConditionalFormatRule,
+  SpreadsheetCellChange,
   SpreadsheetColumnConfig,
+  SpreadsheetExportFormat,
+  SpreadsheetFilterDescriptor,
+  SpreadsheetFilterState,
   SpreadsheetProps,
+  SpreadsheetRef,
+  SpreadsheetRowData,
+  SpreadsheetRowSelectionMode,
+  SpreadsheetSelectionState,
+  SpreadsheetSortDescriptor,
 } from "./types/spreadsheet-types";

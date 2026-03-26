@@ -1,19 +1,30 @@
-import type { ColumnDef, SortingState, ColumnFiltersState, ColumnPinningState, VisibilityState, ExpandedState, RowSelectionState, GroupingState } from "@tanstack/react-table";
+import type {
+  ColumnFiltersState,
+  ColumnPinningState,
+  ExpandedState,
+  GroupingState,
+  RowSelectionState,
+  SortingState,
+  VisibilityState,
+} from "@tanstack/react-table";
 import type { ZodSchema } from "zod";
 
-/** Primitive cell value types */
+/** Primitive cell value types. */
 export type CellValue = string | number | boolean | null | Date;
 
-/** Column data types — determines which editor component is rendered */
+/** Spreadsheet row shape exposed by the public component API. */
+export type SpreadsheetRowData = Record<string, CellValue>;
+
+/** Column data types — determines which editor component is rendered. */
 export type ColumnType = "text" | "number" | "date" | "select" | "checkbox";
 
-/** Validation result from Zod schema */
+/** Validation result from Zod schema. */
 export interface ValidationResult {
   success: boolean;
   error?: string;
 }
 
-/** Props shared by all cell editor components */
+/** Props shared by all cell editor components. */
 export interface CellEditorProps {
   value: CellValue;
   onChange: (value: CellValue) => void;
@@ -22,40 +33,43 @@ export interface CellEditorProps {
   columnConfig: SpreadsheetColumnConfig;
 }
 
-/** Option for select-type columns */
+/** Option for select-type columns. */
 export interface SelectOption {
   label: string;
   value: string;
 }
 
-/** Cell address in the grid */
+/** Cell address in the grid. */
 export interface CellAddress {
   rowIndex: number;
   columnId: string;
 }
 
-/** Selection range (rectangular block) */
+/** Selection range (rectangular block). */
 export interface SelectionRange {
   start: CellAddress;
   end: CellAddress;
 }
 
-/** Pin position for a column */
+/** Pin position for a column. */
 export type PinPosition = "left" | "right" | false;
 
-/** Row pinning — IDs pinned to top or bottom */
+/** Row pinning — IDs pinned to top or bottom. */
 export interface RowPinningState {
   top: string[];
   bottom: string[];
 }
 
-/** Row selection mode */
+/** Row selection mode. */
 export type RowSelectionMode = "single" | "multi";
 
-/** Aggregation type for grouped columns */
+/** Public row selection mode — allows row selection to be disabled entirely. */
+export type SpreadsheetRowSelectionMode = RowSelectionMode | "none";
+
+/** Aggregation type for grouped columns. */
 export type AggregationType = "sum" | "count" | "avg";
 
-/** Cell formatting (UI-only, not stored in HyperFormula) */
+/** Cell formatting (UI-only, not stored in HyperFormula). */
 export interface CellFormat {
   bold?: boolean;
   italic?: boolean;
@@ -64,26 +78,28 @@ export interface CellFormat {
   align?: "left" | "center" | "right";
 }
 
-/** Conditional formatting rule */
+/** Conditional formatting rule. */
 export interface ConditionalFormatRule {
   range: SelectionRange;
   condition: (value: CellValue) => boolean;
   style: CellFormat;
 }
 
-/** Text alignment type */
+/** Text alignment type. */
 export type TextAlignment = "left" | "center" | "right";
 
-/** Context menu position state */
+/** Context menu position state. */
 export interface ContextMenuState {
   x: number;
   y: number;
   cell: CellAddress;
 }
 
-/** Column configuration for the spreadsheet */
-export interface SpreadsheetColumnConfig {
-  id: string;
+/** Public column configuration for the spreadsheet component. */
+export interface SpreadsheetColumnConfig<
+  TData extends SpreadsheetRowData = SpreadsheetRowData,
+> {
+  id: Extract<keyof TData, string> | string;
   header: string;
   width?: number;
   minWidth?: number;
@@ -91,15 +107,132 @@ export interface SpreadsheetColumnConfig {
   pinned?: PinPosition;
   sortable?: boolean;
   filterable?: boolean;
-  filterType?: "text" | "number" | "date" | "select";
-  // Cell editing (Phase 4)
   type?: ColumnType;
-  editable?: boolean | ((row: Record<string, CellValue>) => boolean);
+  editable?: boolean | ((row: TData) => boolean);
   validation?: ZodSchema;
   options?: SelectOption[];
 }
 
-/** UI state managed by Zustand — HyperFormula owns cell data (Phase 6) */
+/** Short public alias for column config exports. */
+export type ColumnConfig<TData extends SpreadsheetRowData = SpreadsheetRowData> =
+  SpreadsheetColumnConfig<TData>;
+
+/** Callback payload for cell edit commits. */
+export interface SpreadsheetCellChange<
+  TData extends SpreadsheetRowData = SpreadsheetRowData,
+> {
+  rowIndex: number;
+  columnId: string;
+  oldValue: CellValue;
+  newValue: CellValue;
+  rowData: TData | undefined;
+}
+
+/** Public selection payload emitted by the top-level component. */
+export interface SpreadsheetSelectionState<
+  TData extends SpreadsheetRowData = SpreadsheetRowData,
+> {
+  activeCell: CellAddress | null;
+  selectionRange: SelectionRange | null;
+  selectedRows: TData[];
+  selectedRowIds: string[];
+}
+
+/** Public sort descriptor. */
+export interface SpreadsheetSortDescriptor {
+  id: string;
+  desc: boolean;
+}
+
+/** Public column filter descriptor. */
+export interface SpreadsheetFilterDescriptor {
+  id: string;
+  value: unknown;
+}
+
+/** Public filter payload. */
+export interface SpreadsheetFilterState {
+  global: string;
+  columns: SpreadsheetFilterDescriptor[];
+}
+
+/** Export formats supported by the component API. */
+export type SpreadsheetExportFormat = "csv" | "xlsx";
+
+/** Runtime feature flags used by internal components. */
+export interface SpreadsheetFeatureFlags {
+  editable: boolean;
+  resizableColumns: boolean;
+  reorderableColumns: boolean;
+  formulasEnabled: boolean;
+  onBeforeCellEdit?: (
+    cell: CellAddress,
+    rowData: SpreadsheetRowData,
+  ) => boolean;
+}
+
+/** Imperative handle exposed by the top-level Spreadsheet component. */
+export interface SpreadsheetRef<
+  TData extends SpreadsheetRowData = SpreadsheetRowData,
+> {
+  /** Focus the grid container so keyboard shortcuts work immediately. */
+  focus: () => void;
+  /** Scroll the viewport to a target cell by current column index or column id. */
+  scrollToCell: (rowIndex: number, column: number | string) => void;
+  /** Read the active selection as a rectangular 2D array. */
+  getSelectedData: () => CellValue[][];
+  /** Read the current row data snapshot. */
+  getData: () => TData[];
+  /** Replace the current dataset and rebuild the HyperFormula sheet. */
+  setData: (data: TData[]) => void;
+  /** Export the visible grid to CSV. */
+  exportToCSV: () => void;
+  /** Export the visible grid to XLSX. */
+  exportToXLSX: () => Promise<void>;
+  /** Trigger a HyperFormula undo operation when available. */
+  undo: () => void;
+  /** Trigger a HyperFormula redo operation when available. */
+  redo: () => void;
+}
+
+/** Props for the public Spreadsheet wrapper component. */
+export interface SpreadsheetProps<
+  TData extends SpreadsheetRowData = SpreadsheetRowData,
+> {
+  data: TData[];
+  columns: SpreadsheetColumnConfig<TData>[];
+  getRowId?: (row: TData, index: number) => string;
+  getSubRows?: (row: TData) => TData[] | undefined;
+  sortable?: boolean;
+  filterable?: boolean;
+  editable?: boolean;
+  resizableColumns?: boolean;
+  reorderableColumns?: boolean;
+  formulasEnabled?: boolean;
+  showToolbar?: boolean;
+  showFormulaBar?: boolean;
+  globalSearchable?: boolean;
+  rowSelection?: SpreadsheetRowSelectionMode;
+  onSelectionChange?: (
+    selection: SpreadsheetSelectionState<TData>,
+  ) => void;
+  onCellChange?: (
+    change: SpreadsheetCellChange<TData>,
+  ) => void | boolean;
+  onBeforeCellEdit?: (cell: CellAddress, row: TData) => boolean;
+  onSort?: (sorting: SpreadsheetSortDescriptor[]) => void;
+  onFilter?: (filters: SpreadsheetFilterState) => void;
+  onExport?: (format: SpreadsheetExportFormat) => void;
+  height?: number | string;
+  pinnedColumns?: { left?: string[]; right?: string[] };
+  defaultColumnWidth?: number;
+  exportFileName?: string;
+  grouping?: string[];
+  className?: string;
+  theme?: "light" | "dark";
+}
+
+/** UI state managed by Zustand — HyperFormula owns cell data. */
 export interface SpreadsheetUIState {
   columns: SpreadsheetColumnConfig[];
   activeCell: CellAddress | null;
@@ -113,21 +246,18 @@ export interface SpreadsheetUIState {
   columnOrder: string[];
   columnPinning: ColumnPinningState;
   columnVisibility: VisibilityState;
-  // Row features (Phase 3)
   rowSelection: RowSelectionState;
   rowSelectionMode: RowSelectionMode;
   lastSelectedRowId: string | null;
   expanded: ExpandedState;
   rowPinning: RowPinningState;
   grouping: GroupingState;
-  // Formula engine (Phase 6) — renderTrigger incremented to force re-render after HF changes
   renderTrigger: number;
-  // Polish (Phase 7) — cell formatting + context menu
   cellFormats: Record<string, CellFormat>;
   contextMenu: ContextMenuState | null;
 }
 
-/** Actions for the Zustand store */
+/** Actions for the Zustand store. */
 export interface SpreadsheetUIActions {
   setActiveCell: (cell: CellAddress | null) => void;
   setSelection: (range: SelectionRange | null) => void;
@@ -146,7 +276,6 @@ export interface SpreadsheetUIActions {
   pinColumn: (columnId: string, position: PinPosition) => void;
   toggleColumnVisibility: (columnId: string) => void;
   updateColumnWidth: (columnId: string, width: number) => void;
-  // Row features (Phase 3)
   setRowSelection: (selection: RowSelectionState) => void;
   setRowSelectionMode: (mode: RowSelectionMode) => void;
   setLastSelectedRowId: (id: string | null) => void;
@@ -155,9 +284,7 @@ export interface SpreadsheetUIActions {
   setRowPinning: (pinning: RowPinningState) => void;
   pinRow: (rowId: string, position: "top" | "bottom" | false) => void;
   setGrouping: (grouping: GroupingState) => void;
-  // Formula engine (Phase 6)
   incrementRenderTrigger: () => void;
-  // Polish (Phase 7) — formatting + context menu
   setCellFormat: (key: string, format: CellFormat) => void;
   setCellFormats: (formats: Record<string, CellFormat>) => void;
   toggleBold: (keys: string[]) => void;
@@ -172,26 +299,9 @@ export interface SpreadsheetUIActions {
 
 export type SpreadsheetStore = SpreadsheetUIState & SpreadsheetUIActions;
 
-/** TanStack Table meta for cell updates */
+/** TanStack Table meta used by internal cell, keyboard, and toolbar flows. */
 export interface SpreadsheetTableMeta {
-  updateData: (rowIndex: number, columnId: string, value: CellValue) => void;
+  updateData: (rowIndex: number, columnId: string, value: CellValue) => boolean;
   getColumnConfig: (columnId: string) => SpreadsheetColumnConfig | undefined;
-}
-
-/** Props for the top-level Spreadsheet component */
-export interface SpreadsheetProps<TData extends Record<string, CellValue>> {
-  data: TData[];
-  columns: ColumnDef<TData, CellValue>[];
-  columnConfigs?: SpreadsheetColumnConfig[];
-  onCellChange?: (address: CellAddress, value: CellValue) => void;
-  sortable?: boolean;
-  filterable?: boolean;
-  globalSearchable?: boolean;
-  rowHeight?: number;
-  defaultColumnWidth?: number;
-  className?: string;
-  // Row features (Phase 3)
-  rowSelectionMode?: RowSelectionMode;
-  getSubRows?: (row: TData) => TData[] | undefined;
-  grouping?: string[];
+  featureFlags: SpreadsheetFeatureFlags;
 }

@@ -18,7 +18,7 @@ import { TableContext } from "./spreadsheet-provider";
 import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import { useColumnResize } from "@/hooks/use-column-resize";
 import { ColumnHeaderMenu } from "./column-header-menu";
-import type { CellValue } from "@/types/spreadsheet-types";
+import type { CellValue, SpreadsheetTableMeta } from "@/types/spreadsheet-types";
 
 const DEFAULT_COL_WIDTH = 120;
 const COL_OVERSCAN = 2;
@@ -31,9 +31,22 @@ export function ColumnHeaders({
 }) {
   const table = useContext(TableContext);
   if (!table) throw new Error("ColumnHeaders must be used within SpreadsheetProvider");
+  const meta = table.options.meta as SpreadsheetTableMeta | undefined;
+  const headerColumns = useSpreadsheetStore((s) => s.columns);
+  const headerSorting = useSpreadsheetStore((s) => s.sorting);
+  const headerColumnOrder = useSpreadsheetStore((s) => s.columnOrder);
+  const headerColumnPinning = useSpreadsheetStore((s) => s.columnPinning);
+  const headerColumnVisibility = useSpreadsheetStore((s) => s.columnVisibility);
 
   const setColumnOrder = useSpreadsheetStore((s) => s.setColumnOrder);
   const updateColumnWidth = useSpreadsheetStore((s) => s.updateColumnWidth);
+  const allowResize = meta?.featureFlags.resizableColumns !== false;
+  const allowReorder = meta?.featureFlags.reorderableColumns !== false;
+  void headerColumns;
+  void headerSorting;
+  void headerColumnOrder;
+  void headerColumnPinning;
+  void headerColumnVisibility;
 
   const { handleResizeStart, handleAutoFit } = useColumnResize({
     onResizeEnd: (columnId, width) => {
@@ -69,11 +82,13 @@ export function ColumnHeaders({
   const columnIds = table.getVisibleLeafColumns().map((c) => c.id);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
+    if (!allowReorder) return;
     setActiveId(event.active.id as string);
-  }, []);
+  }, [allowReorder]);
 
   const handleDragEnd = useCallback((event: DragEndEvent) => {
     setActiveId(null);
+    if (!allowReorder) return;
     const { active, over } = event;
     if (!over || active.id === over.id) return;
 
@@ -84,8 +99,8 @@ export function ColumnHeaders({
     const newOrder = [...columnIds];
     newOrder.splice(oldIndex, 1);
     newOrder.splice(newIndex, 0, active.id as string);
-    setColumnOrder(newOrder);
-  }, [columnIds, setColumnOrder]);
+      setColumnOrder(newOrder);
+    }, [allowReorder, columnIds, setColumnOrder]);
 
   const activeHeader = activeId
     ? [...leftHeaders, ...centerHeaders, ...rightHeaders].find((h) => h.id === activeId)
@@ -105,11 +120,13 @@ export function ColumnHeaders({
               {leftHeaders.map((header) => (
                 <SortableHeader
                   key={header.id}
-                  header={header}
-                  onResizeStart={handleResizeStart}
-                  onAutoFit={(colId) => handleAutoFit(colId, scrollRef.current)}
-                />
-              ))}
+                    header={header}
+                    onResizeStart={handleResizeStart}
+                    onAutoFit={(colId) => handleAutoFit(colId, scrollRef.current)}
+                    allowResize={allowResize}
+                    allowReorder={allowReorder}
+                  />
+                ))}
             </SortableContext>
           </div>
         )}
@@ -125,9 +142,11 @@ export function ColumnHeaders({
                   key={header.id}
                   header={header}
                   onResizeStart={handleResizeStart}
-                  onAutoFit={(colId) => handleAutoFit(colId, scrollRef.current)}
-                  style={{
-                    position: "absolute",
+                    onAutoFit={(colId) => handleAutoFit(colId, scrollRef.current)}
+                    allowResize={allowResize}
+                    allowReorder={allowReorder}
+                    style={{
+                      position: "absolute",
                     top: 0,
                     left: 0,
                     width: virtualCol.size,
@@ -146,11 +165,13 @@ export function ColumnHeaders({
               {rightHeaders.map((header) => (
                 <SortableHeader
                   key={header.id}
-                  header={header}
-                  onResizeStart={handleResizeStart}
-                  onAutoFit={(colId) => handleAutoFit(colId, scrollRef.current)}
-                />
-              ))}
+                    header={header}
+                    onResizeStart={handleResizeStart}
+                    onAutoFit={(colId) => handleAutoFit(colId, scrollRef.current)}
+                    allowResize={allowResize}
+                    allowReorder={allowReorder}
+                  />
+                ))}
             </SortableContext>
           </div>
         )}
@@ -158,7 +179,7 @@ export function ColumnHeaders({
 
       {/* Drag overlay — renders ghost header at 50% opacity */}
       <DragOverlay>
-        {activeHeader ? (
+          {activeHeader ? (
           <div
             className="flex items-center gap-1 border-r border-border px-2 text-sm font-medium bg-muted/80 h-9 opacity-50 rounded shadow-md"
             style={{ width: activeHeader.getSize() }}
@@ -176,21 +197,27 @@ function SortableHeader({
   header,
   onResizeStart,
   onAutoFit,
+  allowResize,
+  allowReorder,
   style,
 }: {
   header: Header<Record<string, CellValue>, unknown>;
   onResizeStart: (e: React.MouseEvent, columnId: string, currentWidth: number) => void;
   onAutoFit: (columnId: string) => void;
+  allowResize: boolean;
+  allowReorder: boolean;
   style?: React.CSSProperties;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: header.id });
 
   const canSort = header.column.getCanSort();
   const sorted = header.column.getIsSorted();
+  const dragTransform = CSS.Translate.toString(transform);
+  const composedTransform = [style?.transform, dragTransform].filter(Boolean).join(" ");
 
   const sortableStyle: React.CSSProperties = {
     ...style,
-    transform: CSS.Translate.toString(transform),
+    transform: composedTransform || undefined,
     transition,
     opacity: isDragging ? 0.3 : 1,
     width: style?.width ?? header.getSize(),
@@ -206,9 +233,11 @@ function SortableHeader({
       style={sortableStyle}
     >
       {/* Drag handle */}
-      <span {...attributes} {...listeners} className="cursor-grab shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" aria-label="Drag to reorder column">
-        <GripVertical className="h-3.5 w-3.5" />
-      </span>
+      {allowReorder && (
+        <span {...attributes} {...listeners} className="cursor-grab shrink-0 opacity-0 group-hover:opacity-50 transition-opacity" aria-label="Drag to reorder column">
+          <GripVertical className="h-3.5 w-3.5" />
+        </span>
+      )}
 
       {/* Header label — click to sort */}
       <button
@@ -236,17 +265,19 @@ function SortableHeader({
       )}
 
       {/* Column menu */}
-      <ColumnHeaderMenu column={header.column} onAutoFit={onAutoFit} />
+        <ColumnHeaderMenu column={header.column} onAutoFit={onAutoFit} allowResize={allowResize} />
 
-      {/* Resize handle */}
-      <div
-        role="separator"
-        aria-label="Resize column"
-        aria-orientation="vertical"
-        className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 transition-colors"
-        onMouseDown={(e) => onResizeStart(e, header.column.id, header.getSize())}
-        onDoubleClick={() => onAutoFit(header.column.id)}
-      />
-    </div>
-  );
-}
+        {/* Resize handle */}
+        {allowResize && (
+          <div
+            role="separator"
+            aria-label="Resize column"
+            aria-orientation="vertical"
+            className="absolute top-0 right-0 w-1.5 h-full cursor-col-resize hover:bg-primary/40 transition-colors"
+            onMouseDown={(e) => onResizeStart(e, header.column.id, header.getSize())}
+            onDoubleClick={() => onAutoFit(header.column.id)}
+          />
+        )}
+      </div>
+    );
+  }

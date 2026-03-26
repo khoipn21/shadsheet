@@ -232,33 +232,35 @@ export function useKeyboardNavigation({
             const minColSel = Math.min(startCol, endCol);
             const maxColSel = Math.max(startCol, endCol);
 
-            if (hf) hf.suspendEvaluation();
-            for (let r = minRow; r <= maxRowSel; r++) {
-              for (let c = minColSel; c <= maxColSel; c++) {
-                const colId = visibleColumnIds[c];
-                if (!canEditCell(r, colId)) continue;
-                if (hf) {
-                  hf.setCellContents({ sheet: 0, row: r, col: letterToColIndex(colId) }, [[null]]);
+              if (hf) hf.suspendEvaluation();
+              for (let r = minRow; r <= maxRowSel; r++) {
+                for (let c = minColSel; c <= maxColSel; c++) {
+                  const colId = visibleColumnIds[c];
+                  if (!canEditCell(r, colId)) continue;
+                  if (meta?.updateData(r, colId, null) === false) continue;
+                  if (hf) {
+                    hf.setCellContents({ sheet: 0, row: r, col: letterToColIndex(colId) }, [[null]]);
+                  }
                 }
-                meta?.updateData(r, colId, null);
               }
-            }
             if (hf) {
               hf.resumeEvaluation();
               incrementRenderTrigger();
             }
-          } else if (activeCell && canEditCell(activeCell.rowIndex, activeCell.columnId)) {
-            if (hf) {
-              hf.setCellContents(
-                { sheet: 0, row: activeCell.rowIndex, col: letterToColIndex(activeCell.columnId) },
-                [[null]],
-              );
-              incrementRenderTrigger();
+            } else if (activeCell && canEditCell(activeCell.rowIndex, activeCell.columnId)) {
+              if (meta?.updateData(activeCell.rowIndex, activeCell.columnId, null) === false) {
+                break;
+              }
+              if (hf) {
+                hf.setCellContents(
+                  { sheet: 0, row: activeCell.rowIndex, col: letterToColIndex(activeCell.columnId) },
+                  [[null]],
+                );
+                incrementRenderTrigger();
+              }
             }
-            meta?.updateData(activeCell.rowIndex, activeCell.columnId, null);
+            break;
           }
-          break;
-        }
 
         default:
           // Ctrl+Z → Undo, Ctrl+Y → Redo (via HyperFormula)

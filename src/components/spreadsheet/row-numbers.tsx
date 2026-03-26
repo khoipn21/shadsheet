@@ -1,5 +1,10 @@
-import { memo, useCallback } from "react";
-import { createColumnHelper, type CellContext, type HeaderContext } from "@tanstack/react-table";
+/* eslint-disable react-refresh/only-export-components */
+import { useCallback } from "react";
+import {
+  createColumnHelper,
+  type CellContext,
+  type HeaderContext,
+} from "@tanstack/react-table";
 import type { CellValue } from "@/types/spreadsheet-types";
 
 type RowData = Record<string, CellValue>;
@@ -7,10 +12,19 @@ const columnHelper = createColumnHelper<RowData>();
 
 const ROW_NUMBER_WIDTH = 52;
 
-/** Tri-state header checkbox: none / some / all selected */
-const SelectAllHeader = memo(function SelectAllHeader({
+/** Tri-state header checkbox: none / some / all selected. */
+function SelectAllHeader({
   table,
-}: HeaderContext<RowData, unknown>) {
+  selectable,
+}: HeaderContext<RowData, unknown> & { selectable: boolean }) {
+  if (!selectable) {
+    return (
+      <div className="flex items-center justify-center w-full text-xs text-muted-foreground">
+        #
+      </div>
+    );
+  }
+
   const isAllSelected = table.getIsAllRowsSelected();
   const isSomeSelected = table.getIsSomeRowsSelected();
 
@@ -28,18 +42,29 @@ const SelectAllHeader = memo(function SelectAllHeader({
       />
     </div>
   );
-});
+}
 
-/** Row number + individual selection checkbox */
-const RowNumberCell = memo(function RowNumberCell({
+/** Row number + optional row selection checkbox. */
+function RowNumberCell({
   row,
-}: CellContext<RowData, unknown>) {
+  selectable,
+}: CellContext<RowData, unknown> & { selectable: boolean }) {
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       row.getToggleSelectedHandler()(e);
     },
     [row],
   );
+
+  if (!selectable) {
+    return (
+      <div className="flex items-center justify-center w-full">
+        <span className="text-xs text-muted-foreground select-none tabular-nums">
+          {row.index + 1}
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center gap-1.5 w-full group">
@@ -57,14 +82,14 @@ const RowNumberCell = memo(function RowNumberCell({
       </span>
     </div>
   );
-});
+}
 
-/** Creates the row-number + selection checkbox column definition */
-export function createRowSelectionColumn() {
+/** Creates the row-number column and optionally enables row selection UI. */
+export function createRowSelectionColumn(selectable = true) {
   return columnHelper.display({
     id: "_row_number",
-    header: SelectAllHeader,
-    cell: RowNumberCell,
+    header: (context) => <SelectAllHeader {...context} selectable={selectable} />,
+    cell: (context) => <RowNumberCell {...context} selectable={selectable} />,
     size: ROW_NUMBER_WIDTH,
     minSize: ROW_NUMBER_WIDTH,
     maxSize: ROW_NUMBER_WIDTH,

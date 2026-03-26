@@ -21,9 +21,14 @@ import type { CellValue } from "@/types/spreadsheet-types";
 interface ColumnHeaderMenuProps {
   column: Column<Record<string, CellValue>, unknown>;
   onAutoFit: (columnId: string) => void;
+  allowResize?: boolean;
 }
 
-export function ColumnHeaderMenu({ column, onAutoFit }: ColumnHeaderMenuProps) {
+export function ColumnHeaderMenu({
+  column,
+  onAutoFit,
+  allowResize = true,
+}: ColumnHeaderMenuProps) {
   const pinColumn = useSpreadsheetStore((s) => s.pinColumn);
   const toggleColumnVisibility = useSpreadsheetStore((s) => s.toggleColumnVisibility);
 
@@ -77,11 +82,15 @@ export function ColumnHeaderMenu({ column, onAutoFit }: ColumnHeaderMenuProps) {
 
         <DropdownMenuSeparator />
 
-        {/* Auto-fit width */}
-        <DropdownMenuItem onClick={() => onAutoFit(column.id)}>
-          <ChevronsLeftRightEllipsis className="mr-2 h-4 w-4" />
-          Auto-fit Width
-        </DropdownMenuItem>
+        {allowResize && (
+          <>
+            <DropdownMenuItem onClick={() => onAutoFit(column.id)}>
+              <ChevronsLeftRightEllipsis className="mr-2 h-4 w-4" />
+              Auto-fit Width
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+          </>
+        )}
 
         {/* Hide column */}
         <DropdownMenuItem onClick={() => toggleColumnVisibility(column.id)}>
