@@ -1,7 +1,7 @@
 {
   "$schema": "https://ui.shadcn.com/schema/registry.json",
   "name": "shadsheet",
-  "homepage": "https://shadsheet.dev",
+  "homepage": "https://github.com/khoipn21/shadsheet",
   "items": [
     {
       "name": "spreadsheet",

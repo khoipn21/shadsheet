@@ -14,12 +14,12 @@
   "topbarLinks": [
     {
       "name": "GitHub",
-      "url": "https://github.com/shadsheet/ui"
+      "url": "https://github.com/khoipn21/shadsheet"
     }
   ],
   "topbarCtaButton": {
     "name": "npm",
-    "url": "https://www.npmjs.com/package/@shadsheet/ui"
+    "url": "https://www.npmjs.com/package/@khoipn2112/shadsheet"
   },
   "tabs": [
     {
@@ -43,7 +43,7 @@
     {
       "name": "GitHub",
       "icon": "github",
-      "url": "https://github.com/shadsheet/ui"
+      "url": "https://github.com/khoipn21/shadsheet"
     }
   ],
   "navigation": [
@@ -100,6 +100,6 @@
     }
   ],
   "footerSocials": {
-    "github": "https://github.com/shadsheet/ui"
+    "github": "https://github.com/khoipn21/shadsheet"
   }
 }

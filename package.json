@@ -1,9 +1,10 @@
 {
-  "name": "@shadsheet/ui",
+  "name": "@khoipn2112/shadsheet",
   "version": "0.3.0",
   "private": false,
   "type": "module",
   "description": "Headless React spreadsheet component library built with TanStack Table, HyperFormula, and shadcn conventions",
+  "author": "khoipn21",
   "keywords": [
     "react",
     "spreadsheet",
@@ -17,11 +18,14 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/shadsheet/ui.git"
+    "url": "https://github.com/khoipn21/shadsheet.git"
   },
-  "homepage": "https://shadsheet.dev",
+  "homepage": "https://github.com/khoipn21/shadsheet#readme",
   "bugs": {
-    "url": "https://github.com/shadsheet/ui/issues"
+    "url": "https://github.com/khoipn21/shadsheet/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "dist",

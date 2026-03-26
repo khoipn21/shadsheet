@@ -5,13 +5,13 @@ Headless React spreadsheet component library built with React 19, TanStack Table
 ## Install
 
 ```bash
-npm install @shadsheet/ui react react-dom
+npm install @khoipn2112/shadsheet react react-dom
 ```
 
 Import the bundled stylesheet once in your app entry:
 
 ```ts
-import "@shadsheet/ui/style.css";
+import "@khoipn2112/shadsheet/style.css";
 ```
 
 ## Requirements
@@ -23,7 +23,7 @@ import "@shadsheet/ui/style.css";
 ## Quick Start
 
 ```tsx
-import { Spreadsheet, type ColumnConfig } from "@shadsheet/ui";
+import { Spreadsheet, type ColumnConfig } from "@khoipn2112/shadsheet";
 
 type Row = {
   A: string;
@@ -244,7 +244,7 @@ import "spreadsheet/style.css";
 
 // After
 import { Spreadsheet } from "@shadsheet/ui";
-import "@shadsheet/ui/style.css";
+import "@khoipn2112/shadsheet/style.css";
 ```
 
 The CSS import is now required explicitly (no longer auto-imported).
