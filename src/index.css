@@ -1,7 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
-@import "@fontsource-variable/geist";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -53,6 +50,7 @@ body {
   from {
     background-position: 0 0;
   }
+
   to {
     background-position: 10px 0;
   }
@@ -62,6 +60,7 @@ body {
   from {
     background-position: 0 0;
   }
+
   to {
     background-position: 0 10px;
   }
@@ -148,9 +147,11 @@ body {
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
   }

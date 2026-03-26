@@ -92,6 +92,7 @@
     {
       "group": "Guides",
       "pages": [
+        "guides/live-demo",
         "guides/headless-usage",
         "guides/custom-layouts",
         "guides/theming",
