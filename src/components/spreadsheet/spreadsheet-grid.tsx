@@ -13,6 +13,12 @@ import { useClipboard } from "@/hooks/use-clipboard";
 import { useAutoFill } from "@/hooks/use-auto-fill";
 import { useGridOperations } from "@/hooks/use-grid-operations";
 import type { CellValue, ConditionalFormatRule, SpreadsheetTableMeta, SpreadsheetColumnConfig } from "@/types/spreadsheet-types";
+import { letterToColIndex } from "@/utils/cell-address";
+import { getCellRawValue } from "@/utils/formula-utils";
+import {
+  getFormulaReferenceColorMap,
+  isFormulaValue,
+} from "@/utils/formula-reference-utils";
 import { isCellEditable } from "@/utils/validation-utils";
 import type { Row, Cell } from "@tanstack/react-table";
 
@@ -55,11 +61,14 @@ export function SpreadsheetGrid({
   const gridExpanded = useSpreadsheetStore((s) => s.expanded);
   const gridGrouping = useSpreadsheetStore((s) => s.grouping);
   const incrementRenderTrigger = useSpreadsheetStore((s) => s.incrementRenderTrigger);
-  const rowPinning = useSpreadsheetStore((s) => s.rowPinning);
-  const activeCell = useSpreadsheetStore((s) => s.activeCell);
-  const editingCell = useSpreadsheetStore((s) => s.editingCell);
-  const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
-  const setActiveCell = useSpreadsheetStore((s) => s.setActiveCell);
+    const rowPinning = useSpreadsheetStore((s) => s.rowPinning);
+    const activeCell = useSpreadsheetStore((s) => s.activeCell);
+    const editingCell = useSpreadsheetStore((s) => s.editingCell);
+    const editValue = useSpreadsheetStore((s) => s.editValue);
+    const formulaPreviewValue = useSpreadsheetStore((s) => s.formulaPreviewValue);
+    const formulaRenderTrigger = useSpreadsheetStore((s) => s.renderTrigger);
+    const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
+    const setActiveCell = useSpreadsheetStore((s) => s.setActiveCell);
   const setSelection = useSpreadsheetStore((s) => s.setSelection);
   const startEditing = useSpreadsheetStore((s) => s.startEditing);
 
@@ -73,9 +82,10 @@ export function SpreadsheetGrid({
   void gridColumnOrder;
   void gridColumnPinning;
   void gridColumnVisibility;
-  void gridRowSelection;
-  void gridExpanded;
-  void gridGrouping;
+    void gridRowSelection;
+    void gridExpanded;
+    void gridGrouping;
+    void formulaRenderTrigger;
 
   const meta = table.options.meta as SpreadsheetTableMeta | undefined;
   const allRows = table.getRowModel().rows;
@@ -120,7 +130,45 @@ export function SpreadsheetGrid({
     return map;
   }, [visibleColumnIds]);
 
-  const totalRowCount = scrollableRows.length;
+    const totalRowCount = scrollableRows.length;
+
+    const currentFormulaValue = useMemo(() => {
+      void formulaRenderTrigger;
+
+      if (editingCell) {
+        if (editValue !== null) {
+          return String(editValue);
+        }
+        if (!hf) return "";
+        return getCellRawValue(
+          hf,
+          editingCell.rowIndex,
+          letterToColIndex(editingCell.columnId),
+        );
+      }
+
+      if (formulaPreviewValue !== null) {
+        return formulaPreviewValue;
+      }
+
+      if (!activeCell || !hf) {
+        return "";
+      }
+
+      return getCellRawValue(
+        hf,
+        activeCell.rowIndex,
+        letterToColIndex(activeCell.columnId),
+      );
+    }, [activeCell, editValue, editingCell, formulaPreviewValue, formulaRenderTrigger, hf]);
+
+    const formulaReferenceColorMap = useMemo(
+      () =>
+        isFormulaValue(currentFormulaValue)
+          ? getFormulaReferenceColorMap(currentFormulaValue)
+          : new Map<string, string>(),
+      [currentFormulaValue],
+    );
 
   const getRowKey = useCallback(
     (index: number) => scrollableRows[index]?.id ?? index,
@@ -325,11 +373,17 @@ export function SpreadsheetGrid({
     [selectionRange, columnIdToIndex],
   );
 
-  const isCellActive = useCallback(
-    (rowIndex: number, columnId: string): boolean =>
-      activeCell?.rowIndex === rowIndex && activeCell?.columnId === columnId,
-    [activeCell],
-  );
+    const isCellActive = useCallback(
+      (rowIndex: number, columnId: string): boolean =>
+        activeCell?.rowIndex === rowIndex && activeCell?.columnId === columnId,
+      [activeCell],
+    );
+
+    const getFormulaReferenceColor = useCallback(
+      (rowIndex: number, columnId: string) =>
+        formulaReferenceColorMap.get(`${rowIndex}:${columnId}`),
+      [formulaReferenceColorMap],
+    );
 
   useEffect(() => {
     if (!apiRef) return;
@@ -385,10 +439,11 @@ export function SpreadsheetGrid({
           label="pinned-top"
           isCellActive={isCellActive}
           isCellSelected={isCellSelected}
-          onCellMouseDown={handleCellMouseDown}
-          onCellMouseEnter={handleCellMouseEnter}
-          onNavigate={handleNavigate}
-        />
+            onCellMouseDown={handleCellMouseDown}
+            onCellMouseEnter={handleCellMouseEnter}
+            getFormulaReferenceColor={getFormulaReferenceColor}
+            onNavigate={handleNavigate}
+          />
       )}
 
       <div ref={scrollRef} className="relative overflow-auto flex-1">
@@ -407,10 +462,11 @@ export function SpreadsheetGrid({
               side="left"
               isCellActive={isCellActive}
               isCellSelected={isCellSelected}
-              onCellMouseDown={handleCellMouseDown}
-              onCellMouseEnter={handleCellMouseEnter}
-              onNavigate={handleNavigate}
-            />
+                onCellMouseDown={handleCellMouseDown}
+                onCellMouseEnter={handleCellMouseEnter}
+                getFormulaReferenceColor={getFormulaReferenceColor}
+                onNavigate={handleNavigate}
+              />
           )}
 
           {/* Center virtualized pane */}
@@ -443,12 +499,13 @@ export function SpreadsheetGrid({
                         height={virtualRow.size}
                         translateX={virtualCol.start}
                         isActive={isCellActive(rIdx, cId)}
-                        isSelected={isCellSelected(rIdx, cId)}
-                        rowSelected={isRowSelected}
-                        rowExpanded={row.getIsExpanded()}
-                        onCellMouseDown={handleCellMouseDown}
-                        onCellMouseEnter={handleCellMouseEnter}
-                        onNavigate={handleNavigate}
+                          isSelected={isCellSelected(rIdx, cId)}
+                          rowSelected={isRowSelected}
+                          rowExpanded={row.getIsExpanded()}
+                          formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                          onCellMouseDown={handleCellMouseDown}
+                          onCellMouseEnter={handleCellMouseEnter}
+                          onNavigate={handleNavigate}
                         conditionalFormats={conditionalFormats}
                       />
                     );
@@ -488,10 +545,11 @@ export function SpreadsheetGrid({
               side="right"
               isCellActive={isCellActive}
               isCellSelected={isCellSelected}
-              onCellMouseDown={handleCellMouseDown}
-              onCellMouseEnter={handleCellMouseEnter}
-              onNavigate={handleNavigate}
-            />
+                onCellMouseDown={handleCellMouseDown}
+                onCellMouseEnter={handleCellMouseEnter}
+                getFormulaReferenceColor={getFormulaReferenceColor}
+                onNavigate={handleNavigate}
+              />
           )}
         </div>
       </div>
@@ -509,10 +567,11 @@ export function SpreadsheetGrid({
           label="pinned-bottom"
           isCellActive={isCellActive}
           isCellSelected={isCellSelected}
-          onCellMouseDown={handleCellMouseDown}
-          onCellMouseEnter={handleCellMouseEnter}
-          onNavigate={handleNavigate}
-        />
+            onCellMouseDown={handleCellMouseDown}
+            onCellMouseEnter={handleCellMouseEnter}
+            getFormulaReferenceColor={getFormulaReferenceColor}
+            onNavigate={handleNavigate}
+          />
       )}
 
       {/* Status bar with aggregates */}
@@ -546,6 +605,10 @@ interface SelectionCallbacks {
   isCellSelected: (rowIndex: number, columnId: string) => boolean;
   onCellMouseDown: (rowIndex: number, columnId: string, shiftKey: boolean) => void;
   onCellMouseEnter: (rowIndex: number, columnId: string) => void;
+  getFormulaReferenceColor: (
+    rowIndex: number,
+    columnId: string,
+  ) => string | undefined;
   onNavigate: (fromRow: number, fromColumnId: string, direction: "up" | "down" | "left" | "right") => void;
 }
 
@@ -560,6 +623,7 @@ function PinnedPane({
   isCellSelected,
   onCellMouseDown,
   onCellMouseEnter,
+  getFormulaReferenceColor,
   onNavigate,
 }: {
   rows: Row<Record<string, CellValue>>[];
@@ -601,13 +665,14 @@ function PinnedPane({
                     width={width}
                     height={virtualRow.size}
                     translateX={translateX}
-                    isActive={isCellActive(rIdx, cId)}
-                    isSelected={isCellSelected(rIdx, cId)}
-                    rowSelected={isSelected}
-                    rowExpanded={row.getIsExpanded()}
-                    onCellMouseDown={onCellMouseDown}
-                    onCellMouseEnter={onCellMouseEnter}
-                    onNavigate={onNavigate}
+                      isActive={isCellActive(rIdx, cId)}
+                      isSelected={isCellSelected(rIdx, cId)}
+                      rowSelected={isSelected}
+                      rowExpanded={row.getIsExpanded()}
+                      formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                      onCellMouseDown={onCellMouseDown}
+                      onCellMouseEnter={onCellMouseEnter}
+                      onNavigate={onNavigate}
                 />
               );
             })}
@@ -632,6 +697,7 @@ function FixedRowBand({
   isCellSelected,
   onCellMouseDown,
   onCellMouseEnter,
+  getFormulaReferenceColor,
   onNavigate,
 }: {
   rows: Row<Record<string, CellValue>>[];
@@ -671,13 +737,14 @@ function FixedRowBand({
                         width={width}
                         height={ROW_HEIGHT}
                         translateX={translateX}
-                        isActive={isCellActive(rIdx, cId)}
-                        isSelected={isCellSelected(rIdx, cId)}
-                        rowSelected={row.getIsSelected()}
-                        rowExpanded={row.getIsExpanded()}
-                        onCellMouseDown={onCellMouseDown}
-                        onCellMouseEnter={onCellMouseEnter}
-                        onNavigate={onNavigate}
+                          isActive={isCellActive(rIdx, cId)}
+                          isSelected={isCellSelected(rIdx, cId)}
+                          rowSelected={row.getIsSelected()}
+                          rowExpanded={row.getIsExpanded()}
+                          formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                          onCellMouseDown={onCellMouseDown}
+                          onCellMouseEnter={onCellMouseEnter}
+                          onNavigate={onNavigate}
                     />
                   );
                 })}
@@ -706,13 +773,14 @@ function FixedRowBand({
                         width={width}
                         height={ROW_HEIGHT}
                         translateX={translateX}
-                        isActive={isCellActive(rIdx, cId)}
-                        isSelected={isCellSelected(rIdx, cId)}
-                        rowSelected={row.getIsSelected()}
-                        rowExpanded={row.getIsExpanded()}
-                        onCellMouseDown={onCellMouseDown}
-                        onCellMouseEnter={onCellMouseEnter}
-                        onNavigate={onNavigate}
+                          isActive={isCellActive(rIdx, cId)}
+                          isSelected={isCellSelected(rIdx, cId)}
+                          rowSelected={row.getIsSelected()}
+                          rowExpanded={row.getIsExpanded()}
+                          formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                          onCellMouseDown={onCellMouseDown}
+                          onCellMouseEnter={onCellMouseEnter}
+                          onNavigate={onNavigate}
                   />
                 );
               })}
@@ -741,13 +809,14 @@ function FixedRowBand({
                         width={width}
                         height={ROW_HEIGHT}
                         translateX={translateX}
-                        isActive={isCellActive(rIdx, cId)}
-                        isSelected={isCellSelected(rIdx, cId)}
-                        rowSelected={row.getIsSelected()}
-                        rowExpanded={row.getIsExpanded()}
-                        onCellMouseDown={onCellMouseDown}
-                        onCellMouseEnter={onCellMouseEnter}
-                        onNavigate={onNavigate}
+                          isActive={isCellActive(rIdx, cId)}
+                          isSelected={isCellSelected(rIdx, cId)}
+                          rowSelected={row.getIsSelected()}
+                          rowExpanded={row.getIsExpanded()}
+                          formulaReferenceColor={getFormulaReferenceColor(rIdx, cId)}
+                          onCellMouseDown={onCellMouseDown}
+                          onCellMouseEnter={onCellMouseEnter}
+                          onNavigate={onNavigate}
                     />
                   );
                 })}

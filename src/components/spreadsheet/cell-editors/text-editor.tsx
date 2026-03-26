@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from "react";
 import type { CellEditorProps } from "@/types/spreadsheet-types";
+import { FormulaReferenceInput } from "../formula-reference-input";
 
 export function TextEditor({ value, onChange, onCommit, onCancel }: CellEditorProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -27,10 +28,13 @@ export function TextEditor({ value, onChange, onCommit, onCancel }: CellEditorPr
   );
 
   return (
-    <input
+    <FormulaReferenceInput
       ref={inputRef}
       type="text"
-      className="w-full h-full bg-background border-2 border-primary px-1.5 text-sm outline-none"
+      className="w-full h-full bg-background border-2 border-primary"
+      contentClassName="w-full h-full px-1.5 text-sm"
+      overlayClassName="flex items-center"
+      inputClassName="px-1.5 text-sm"
       value={value == null ? "" : String(value)}
       onChange={(e) => onChange(e.target.value)}
       onBlur={onCommit}

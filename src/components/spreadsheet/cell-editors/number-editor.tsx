@@ -1,5 +1,6 @@
 import { useRef, useEffect, useCallback } from "react";
 import type { CellEditorProps } from "@/types/spreadsheet-types";
+import { FormulaReferenceInput } from "../formula-reference-input";
 
 export function NumberEditor({ value, onChange, onCommit, onCancel }: CellEditorProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -29,6 +30,10 @@ export function NumberEditor({ value, onChange, onCommit, onCancel }: CellEditor
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const raw = e.target.value;
+      if (raw.startsWith("=")) {
+        onChange(raw);
+        return;
+      }
       // Allow empty string while typing, parse on commit
       if (raw === "" || raw === "-") {
         onChange(raw);
@@ -41,10 +46,14 @@ export function NumberEditor({ value, onChange, onCommit, onCancel }: CellEditor
   );
 
   return (
-    <input
+    <FormulaReferenceInput
       ref={inputRef}
-      type="number"
-      className="w-full h-full bg-background border-2 border-primary px-1.5 text-sm outline-none [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+      type="text"
+      inputMode="decimal"
+      className="w-full h-full bg-background border-2 border-primary"
+      contentClassName="w-full h-full px-1.5 text-sm"
+      overlayClassName="flex items-center"
+      inputClassName="px-1.5 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
       value={value == null ? "" : String(value)}
       onChange={handleChange}
       onBlur={onCommit}

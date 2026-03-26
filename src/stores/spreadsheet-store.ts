@@ -22,11 +22,12 @@ export const createSpreadsheetStore = (
     immer((set) => ({
       // State
       columns: initialColumns,
-      activeCell: null,
-      selectionRange: null,
-      editingCell: null,
-      editValue: null as CellValue,
-      validationError: null as string | null,
+        activeCell: null,
+        selectionRange: null,
+        editingCell: null,
+        editValue: null as CellValue,
+        formulaPreviewValue: null as string | null,
+        validationError: null as string | null,
       sorting: [],
       columnFilters: [],
       globalFilter: "",
@@ -62,30 +63,37 @@ export const createSpreadsheetStore = (
           state.editingCell = cell;
         }),
 
-      setEditValue: (value: CellValue) =>
-        set((state) => {
-          state.editValue = value;
-        }),
+        setEditValue: (value: CellValue) =>
+          set((state) => {
+            state.editValue = value;
+          }),
+
+        setFormulaPreviewValue: (value: string | null) =>
+          set((state) => {
+            state.formulaPreviewValue = value;
+          }),
 
       setValidationError: (error: string | null) =>
         set((state) => {
           state.validationError = error;
         }),
 
-      startEditing: (cell: CellAddress, overwrite = false) =>
-        set((state) => {
-          state.editingCell = cell;
-          state.editValue = overwrite ? "" : null; // null = use current cell value
-          state.validationError = null;
-          state.activeCell = cell;
-        }),
+        startEditing: (cell: CellAddress, overwrite = false) =>
+          set((state) => {
+            state.editingCell = cell;
+            state.editValue = overwrite ? "" : null; // null = use current cell value
+            state.formulaPreviewValue = null;
+            state.validationError = null;
+            state.activeCell = cell;
+          }),
 
-      cancelEdit: () =>
-        set((state) => {
-          state.editingCell = null;
-          state.editValue = null;
-          state.validationError = null;
-        }),
+        cancelEdit: () =>
+          set((state) => {
+            state.editingCell = null;
+            state.editValue = null;
+            state.formulaPreviewValue = null;
+            state.validationError = null;
+          }),
 
       setSorting: (sorting: SortingState) =>
         set((state) => {

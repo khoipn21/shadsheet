@@ -20,6 +20,7 @@ interface CellRendererProps {
   isSelected?: boolean;
   rowSelected?: boolean;
   rowExpanded?: boolean;
+  formulaReferenceColor?: string;
   onCellMouseDown?: (rowIndex: number, columnId: string, shiftKey: boolean) => void;
   onCellMouseEnter?: (rowIndex: number, columnId: string) => void;
   /** Called after successful commit with a navigation direction (Enter/Tab) */
@@ -37,6 +38,7 @@ export const CellRenderer = memo(function CellRenderer({
   isSelected = false,
   rowSelected,
   rowExpanded,
+  formulaReferenceColor,
   onCellMouseDown,
   onCellMouseEnter,
   onNavigate,
@@ -320,9 +322,16 @@ export const CellRenderer = memo(function CellRenderer({
       onDoubleClick={handleDoubleClick}
       onMouseDown={handleMouseDown}
       onMouseEnter={handleMouseEnter}
-    >
-      {showTreeControls && canExpand && (
-        <button
+      >
+        {formulaReferenceColor && !isRowNumberCol && (
+          <div
+            className="pointer-events-none absolute inset-[2px] z-[3] rounded-[3px] border-2 border-dashed"
+            style={{ borderColor: formulaReferenceColor }}
+          />
+        )}
+
+        {showTreeControls && canExpand && (
+          <button
           type="button"
           onMouseDown={handleChevronMouseDown}
           onClick={handleChevronClick}

@@ -239,6 +239,7 @@ export interface SpreadsheetUIState {
   selectionRange: SelectionRange | null;
   editingCell: CellAddress | null;
   editValue: CellValue;
+  formulaPreviewValue: string | null;
   validationError: string | null;
   sorting: SortingState;
   columnFilters: ColumnFiltersState;
@@ -263,6 +264,7 @@ export interface SpreadsheetUIActions {
   setSelection: (range: SelectionRange | null) => void;
   setEditingCell: (cell: CellAddress | null) => void;
   setEditValue: (value: CellValue) => void;
+  setFormulaPreviewValue: (value: string | null) => void;
   setValidationError: (error: string | null) => void;
   startEditing: (cell: CellAddress, overwrite?: boolean) => void;
   cancelEdit: () => void;

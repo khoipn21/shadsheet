@@ -5,6 +5,7 @@ import { getCellRawValue } from "@/utils/formula-utils";
 import { toA1, letterToColIndex } from "@/utils/cell-address";
 import { TableContext } from "./spreadsheet-provider";
 import type { SpreadsheetTableMeta } from "@/types/spreadsheet-types";
+import { FormulaReferenceInput } from "./formula-reference-input";
 
 /**
  * Formula bar: shows cell address label + raw formula/value of active cell.
@@ -15,6 +16,9 @@ export function FormulaBar() {
   const table = useContext(TableContext);
   const activeCell = useSpreadsheetStore((s) => s.activeCell);
   const editingCell = useSpreadsheetStore((s) => s.editingCell);
+  const setFormulaPreviewValue = useSpreadsheetStore(
+    (s) => s.setFormulaPreviewValue,
+  );
   const incrementRenderTrigger = useSpreadsheetStore((s) => s.incrementRenderTrigger);
   useSpreadsheetStore((s) => s.renderTrigger);
   const meta = table?.options.meta as SpreadsheetTableMeta | undefined;
@@ -51,11 +55,14 @@ export function FormulaBar() {
     if (!canEdit) return;
     setIsEditing(true);
     setLocalValue(rawValue);
-  }, [canEdit, rawValue]);
+    setFormulaPreviewValue(rawValue);
+  }, [canEdit, rawValue, setFormulaPreviewValue]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalValue(e.target.value);
-  }, []);
+    const nextValue = e.target.value;
+    setLocalValue(nextValue);
+    setFormulaPreviewValue(nextValue);
+  }, [setFormulaPreviewValue]);
 
   const commit = useCallback(() => {
     if (!hf || !activeCell || !canEdit) return;
@@ -66,7 +73,8 @@ export function FormulaBar() {
     hf.setCellContents({ sheet: 0, row: activeCell.rowIndex, col }, [[localValue]]);
     incrementRenderTrigger();
     setIsEditing(false);
-  }, [hf, activeCell, canEdit, localValue, incrementRenderTrigger, meta]);
+    setFormulaPreviewValue(null);
+  }, [hf, activeCell, canEdit, localValue, incrementRenderTrigger, meta, setFormulaPreviewValue]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -77,18 +85,23 @@ export function FormulaBar() {
       } else if (e.key === "Escape") {
         e.preventDefault();
         setLocalValue(rawValue);
+        setFormulaPreviewValue(null);
         setIsEditing(false);
         inputRef.current?.blur();
       }
     },
-    [commit, rawValue],
+    [commit, rawValue, setFormulaPreviewValue],
   );
 
   const handleBlur = useCallback(() => {
     if (isEditing) {
       commit();
+      return;
     }
-  }, [isEditing, commit]);
+    setFormulaPreviewValue(null);
+  }, [isEditing, commit, setFormulaPreviewValue]);
+
+  useEffect(() => () => setFormulaPreviewValue(null), [setFormulaPreviewValue]);
 
   // Don't render formula bar while a cell editor is active (avoid double editing UX)
   const isCellEditing = editingCell !== null;
@@ -102,10 +115,12 @@ export function FormulaBar() {
       <div className="w-px h-4 bg-border flex-shrink-0" />
       {/* Formula/value input */}
       <span className="text-muted-foreground flex-shrink-0 select-none text-xs italic">fx</span>
-      <input
+      <FormulaReferenceInput
         ref={inputRef}
         type="text"
-        className="flex-1 bg-transparent outline-none font-mono text-sm min-w-0"
+        className="flex-1 min-w-0 h-full"
+        contentClassName="flex h-full items-center font-mono text-sm min-w-0"
+        inputClassName="w-full h-full placeholder:text-muted-foreground"
         value={isCellEditing ? rawValue : localValue}
         readOnly={isCellEditing || !activeCell || !canEdit}
         onChange={handleChange}
