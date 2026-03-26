@@ -144,10 +144,16 @@ export interface SpreadsheetSortDescriptor {
   desc: boolean;
 }
 
+/** Freeform column filter input: plain search plus expression language. */
+export interface SpreadsheetColumnFilterValue {
+  search: string;
+  expression: string;
+}
+
 /** Public column filter descriptor. */
 export interface SpreadsheetFilterDescriptor {
   id: string;
-  value: unknown;
+  value: SpreadsheetColumnFilterValue;
 }
 
 /** Public filter payload. */

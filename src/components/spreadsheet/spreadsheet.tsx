@@ -10,7 +10,7 @@ import {
   type ReactElement,
   type Ref,
 } from "react";
-import { createColumnHelper, type Table } from "@tanstack/react-table";
+import { createColumnHelper, type FilterFn, type Table } from "@tanstack/react-table";
 import type { HyperFormula } from "hyperformula";
 import type { StoreApi } from "zustand";
 import { SpreadsheetProvider, SpreadsheetContext, TableContext } from "./spreadsheet-provider";
@@ -21,6 +21,10 @@ import { GlobalSearchFilter } from "./global-search-filter";
 import { useHyperFormula } from "@/hooks/use-hyperformula";
 import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import { cn } from "@/lib/utils";
+import {
+  normalizeColumnFilterValue,
+  spreadsheetColumnFilterFn,
+} from "@/utils/column-filter-utils";
 import { exportToCSV, exportToXLSX } from "@/utils/export-utils";
 import { readSheetRows, replaceSheetData } from "@/utils/formula-utils";
 import type {
@@ -90,11 +94,14 @@ function SpreadsheetBridge<TData extends SpreadsheetRowData>({
   }, [onSort, sorting]);
 
   useEffect(() => {
-    onFilter?.({
-      global: globalFilter,
-      columns: columnFilters.map(({ id, value }) => ({ id, value })),
-    });
-  }, [columnFilters, globalFilter, onFilter]);
+      onFilter?.({
+        global: globalFilter,
+        columns: columnFilters.map(({ id, value }) => ({
+          id,
+          value: normalizeColumnFilterValue(value),
+        })),
+      });
+    }, [columnFilters, globalFilter, onFilter]);
 
   return null;
 }
@@ -158,14 +165,15 @@ function SpreadsheetInner<TData extends SpreadsheetRowData>(
   const tableColumns = useMemo(
     () =>
       resolvedColumns.map((column) =>
-        helper.accessor((row) => row[column.id as keyof TData] as CellValue, {
-          id: column.id as string,
-          header: column.header,
-          size: column.width,
-          enableSorting: column.sortable !== false,
-          enableColumnFilter: column.filterable !== false,
-          enableResizing: resizableColumns,
-        }),
+          helper.accessor((row) => row[column.id as keyof TData] as CellValue, {
+            id: column.id as string,
+            header: column.header,
+            size: column.width,
+            enableSorting: column.sortable !== false,
+            enableColumnFilter: column.filterable !== false,
+            filterFn: spreadsheetColumnFilterFn as unknown as FilterFn<TData>,
+            enableResizing: resizableColumns,
+          }),
       ),
     [helper, resolvedColumns, resizableColumns],
   );

@@ -8,6 +8,7 @@ export type {
   ColumnConfig,
   ConditionalFormatRule,
   SpreadsheetCellChange,
+  SpreadsheetColumnFilterValue,
   SpreadsheetColumnConfig,
   SpreadsheetExportFormat,
   SpreadsheetFilterDescriptor,

@@ -9,6 +9,7 @@ import {
 import {
   ArrowUpAZ,
   ArrowDownZA,
+  Funnel,
   PinIcon,
   PinOffIcon,
   EyeOffIcon,
@@ -17,6 +18,11 @@ import {
 } from "lucide-react";
 import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import type { CellValue } from "@/types/spreadsheet-types";
+import { ColumnFilterPanel } from "./column-filter-panel";
+import {
+  isColumnFilterActive,
+  normalizeColumnFilterValue,
+} from "@/utils/column-filter-utils";
 
 interface ColumnHeaderMenuProps {
   column: Column<Record<string, CellValue>, unknown>;
@@ -35,16 +41,35 @@ export function ColumnHeaderMenu({
   const isPinnedLeft = column.getIsPinned() === "left";
   const isPinnedRight = column.getIsPinned() === "right";
   const canSort = column.getCanSort();
+  const canFilter = column.getCanFilter();
+  const hasActiveFilter = isColumnFilterActive(
+    normalizeColumnFilterValue(column.getFilterValue()),
+  );
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
-        className="shrink-0 opacity-0 group-hover:opacity-60 hover:opacity-100 transition-opacity p-0.5 rounded"
+        className={`shrink-0 p-0.5 rounded transition-opacity ${
+          hasActiveFilter
+            ? "opacity-100 text-primary"
+            : "opacity-0 group-hover:opacity-60 hover:opacity-100"
+        }`}
         onClick={(e) => e.stopPropagation()}
       >
-        <ChevronDown className="h-3.5 w-3.5" />
+        {hasActiveFilter ? (
+          <Funnel className="h-3.5 w-3.5" />
+        ) : (
+          <ChevronDown className="h-3.5 w-3.5" />
+        )}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-48">
+      <DropdownMenuContent align="start" className="w-80 min-w-80">
+        {canFilter && (
+          <>
+            <ColumnFilterPanel column={column} />
+            <DropdownMenuSeparator />
+          </>
+        )}
+
         {/* Sort options */}
         {canSort && (
           <>
