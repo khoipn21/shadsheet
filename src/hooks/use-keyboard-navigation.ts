@@ -2,6 +2,7 @@ import { useCallback, useRef, useEffect } from "react";
 import type { Virtualizer } from "@tanstack/react-virtual";
 import type { HyperFormula } from "hyperformula";
 import type { CellAddress, SpreadsheetTableMeta } from "@/types/spreadsheet-types";
+import { useSpreadsheetStore } from "@/hooks/use-spreadsheet-store";
 import { letterToColIndex } from "@/utils/cell-address";
 
 interface UseKeyboardNavigationParams {
@@ -46,6 +47,7 @@ export function useKeyboardNavigation({
   hf,
   incrementRenderTrigger,
 }: UseKeyboardNavigationParams) {
+  const setClipboardSelection = useSpreadsheetStore((s) => s.setClipboardSelection);
   const colCount = visibleColumnIds.length;
   const maxRow = totalRowCount - 1;
   const maxCol = colCount - 1;
@@ -217,6 +219,8 @@ export function useKeyboardNavigation({
           if (selectionRange) {
             setSelection(null);
           }
+          // Clear clipboard marching ants (copy/cut border)
+          setClipboardSelection(null, null);
           break;
 
         case "Delete":

@@ -57,6 +57,7 @@ export function Example() {
 - `Spreadsheet` exposes a single top-level component with toolbar, formula bar, search, grid, status bar, and export controls.
 - `SpreadsheetRef` supports `focus`, `scrollToCell`, `getSelectedData`, `getData`, `setData`, `exportToCSV`, `exportToXLSX`, `undo`, and `redo`.
 - Callback props: `onCellChange`, `onSelectionChange`, `onSort`, `onFilter`, `onExport`.
+- Each column menu includes freeform Excel-style filtering: plain column search plus expression filters such as `>100 && <500`, `contains(alpha)`, `blank()`, `in(open,closed)`, or `regex(^A)`.
 
 ## Storybook
 
