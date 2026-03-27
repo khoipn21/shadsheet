@@ -1,0 +1,1034 @@
+---
+title: llms-full.txt
+description: Complete documentation for ShadSheet in a single file for AI tools and LLM indexing.
+---
+
+# ShadSheet Documentation
+
+> Headless React spreadsheet component library built with TanStack Table, HyperFormula, and shadcn conventions.
+
+## Table of Contents
+- [Introduction](#introduction)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Concepts](#concepts)
+- [Components](#components)
+- [Hooks](#hooks)
+- [Utilities](#utilities)
+- [Guides](#guides)
+
+---
+
+## Introduction
+
+ShadSheet is a headless React spreadsheet component library that gives you full control over styling while handling all the complex logic.
+
+### Why ShadSheet?
+
+#### Headless-First
+
+Unlike traditional spreadsheet components that lock you into specific styling, ShadSheet exports:
+
+- **Hooks** for state management (`useSpreadsheetStore`, `useCellSelection`, `useClipboard`)
+- **Sub-components** for composition (`Toolbar`, `FormulaBar`, `SpreadsheetGrid`)
+- **Utilities** for data operations (`exportToCSV`, `validateCellValue`)
+
+Build your own UI or use the batteries-included `Spreadsheet` component.
+
+#### Layered Architecture
+
+```
+┌─────────────────────────────────────────┐
+│  <Spreadsheet />  (batteries-included)  │  ← Default: import and go
+├─────────────────────────────────────────┤
+│  Sub-components: Toolbar, FormulaBar,   │  ← Compose your own layout
+│  Grid, StatusBar, ColumnHeaders, etc.   │
+├─────────────────────────────────────────┤
+│  Hooks: useSpreadsheetStore, useCell,   │  ← Full control over state
+│  useSelection, useClipboard, etc.       │
+├─────────────────────────────────────────┤
+│  Utils: export, filter, formula, merge  │  ← Standalone utilities
+├─────────────────────────────────────────┤
+│  Types: all public interfaces           │  ← TypeScript-first
+└─────────────────────────────────────────┘
+```
+
+#### Feature-Rich
+
+- **Virtualization** - Handle 100K+ rows with TanStack Virtual
+- **Formulas** - Full Excel-compatible formulas via HyperFormula
+- **Selection** - Range selection, keyboard navigation, clipboard
+- **Filtering** - Global search + per-column expression filters
+- **Sorting** - Multi-column sort with TanStack Table
+- **Pinning** - Left and right pinned columns
+- **Merging** - Cell merging with undo/redo
+- **Export** - CSV and XLSX download
+- **Formatting** - Bold, italic, colors, alignment
+- **Theming** - Light/dark mode, Tailwind CSS
+
+### Quick Comparison
+
+| Feature | ShadSheet | TanStack Table | React Data Grid |
+|---------|-----------|----------------|-----------------|
+| Headless | ✓ (layered) | ✓ | ✗ |
+| Formulas | ✓ (HyperFormula) | ✗ | ✓ |
+| Virtualization | ✓ | ✓ | ✓ |
+| Cell Merging | ✓ | ✗ | ✓ |
+| Bundle Size | ~150KB | ~45KB | ~200KB |
+| Styling | Tailwind/shadcn | BYO | Built-in |
+
+### When to Use ShadSheet
+
+**Good fit:**
+
+- Building data-intensive React applications
+- Need spreadsheet-like editing with formulas
+- Want headless control over styling
+- Using Tailwind CSS and shadcn/ui
+
+**Consider alternatives:**
+
+- Simple tables without editing → TanStack Table
+- Need complete built-in styling → AG Grid, React Data Grid
+- Non-React environments
+
+---
+
+## Installation
+
+### Requirements
+
+- React 19+
+- Node.js 20+
+- Tailwind CSS 4+
+
+### Install Package
+
+```bash
+npm install @shadsheet/ui
+```
+
+#### Peer Dependencies
+
+ShadSheet requires these peer dependencies:
+
+```bash
+npm install react react-dom lucide-react @base-ui/react
+```
+
+### Import Styles
+
+Import the CSS in your app entry point:
+
+```tsx
+// main.tsx or App.tsx
+import "@shadsheet/ui/style.css";
+```
+
+> Note: The CSS import is **required**. It's not auto-imported to support headless usage.
+
+### Tailwind Configuration
+
+Ensure your `tailwind.config.js` includes ShadSheet's classes:
+
+```js
+// tailwind.config.js
+export default {
+  content: [
+    "./src/**/*.{js,ts,jsx,tsx}",
+    "./node_modules/@shadsheet/ui/dist/**/*.{js,ts,jsx,tsx}",
+  ],
+  // ... rest of config
+}
+```
+
+### Verify Installation
+
+Create a simple spreadsheet to verify everything works:
+
+```tsx
+import { Spreadsheet, type ColumnConfig } from "@shadsheet/ui";
+import "@shadsheet/ui/style.css";
+
+type Row = {
+  name: string;
+  amount: number;
+  active: boolean;
+};
+
+const columns: ColumnConfig<Row>[] = [
+  { id: "name", header: "Name", editable: true, width: 180 },
+  { id: "amount", header: "Amount", type: "number", editable: true },
+  { id: "active", header: "Active", type: "checkbox", editable: true },
+];
+
+const data: Row[] = [
+  { name: "Alpha", amount: 100, active: true },
+  { name: "Beta", amount: 200, active: false },
+];
+
+export function App() {
+  return (
+    <div style={{ height: 400 }}>
+      <Spreadsheet data={data} columns={columns} />
+    </div>
+  );
+}
+```
+
+### Next Steps
+
+- [Quick Start](#quick-start) - Build your first spreadsheet
+- [Concepts](#concepts) - Understand the architecture
+- [Headless Usage](#headless-usage) - Use hooks and sub-components
+
+---
+
+## Quick Start
+
+### Basic Spreadsheet
+
+The simplest way to use ShadSheet is the `Spreadsheet` component:
+
+```tsx
+import { Spreadsheet, type ColumnConfig } from "@shadsheet/ui";
+import "@shadsheet/ui/style.css";
+
+type Row = {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+};
+
+const columns: ColumnConfig<Row>[] = [
+  { id: "id", header: "ID", width: 80 },
+  { id: "name", header: "Name", editable: true, width: 200 },
+  { id: "email", header: "Email", editable: true, width: 250 },
+  { id: "role", header: "Role", type: "select", editable: true, options: [
+    { label: "Admin", value: "admin" },
+    { label: "User", value: "user" },
+    { label: "Guest", value: "guest" },
+  ]},
+];
+
+const data: Row[] = [
+  { id: "1", name: "Alice", email: "alice@example.com", role: "admin" },
+  { id: "2", name: "Bob", email: "bob@example.com", role: "user" },
+];
+
+export function App() {
+  return (
+    <div style={{ height: 500 }}>
+      <Spreadsheet
+        data={data}
+        columns={columns}
+        sortable
+        filterable
+        editable
+        onCellChange={({ rowIndex, columnId, newValue }) => {
+          console.log(`Cell ${rowIndex}.${columnId} changed to:`, newValue);
+        }}
+      />
+    </div>
+  );
+}
+```
+
+### Column Types
+
+ShadSheet supports several column types:
+
+#### Text
+
+```tsx
+{ id: "name", header: "Name", type: "text", editable: true }
+```
+
+#### Number
+
+```tsx
+{ id: "amount", header: "Amount", type: "number", editable: true }
+```
+
+#### Checkbox
+
+```tsx
+{ id: "active", header: "Active", type: "checkbox", editable: true }
+```
+
+#### Date
+
+```tsx
+{ id: "created", header: "Created", type: "date", editable: true }
+```
+
+#### Select
+
+```tsx
+{
+  id: "status",
+  header: "Status",
+  type: "select",
+  editable: true,
+  options: [
+    { label: "Pending", value: "pending" },
+    { label: "Approved", value: "approved" },
+    { label: "Rejected", value: "rejected" },
+  ]
+}
+```
+
+### Cell Changes
+
+Handle cell edits with `onCellChange`:
+
+```tsx
+<Spreadsheet
+  data={data}
+  columns={columns}
+  onCellChange={({ rowIndex, columnId, oldValue, newValue, rowData }) => {
+    // Update your state/backend
+    updateRow(rowIndex, columnId, newValue);
+
+    // Return false to veto the change
+    // return false;
+  }}
+/>
+```
+
+### Formulas
+
+Enable formulas with the `formulasEnabled` prop:
+
+```tsx
+const data = [
+  { item: "Widget", price: 100, quantity: 5, total: "=B1*C1" },
+  { item: "Gadget", price: 50, quantity: 10, total: "=B2*C2" },
+];
+
+<Spreadsheet
+  data={data}
+  columns={columns}
+  formulasEnabled
+  showFormulaBar
+/>
+```
+
+> Note: Formulas use HyperFormula syntax (Excel-compatible).
+
+### Selection Tracking
+
+Track cell selection changes:
+
+```tsx
+<Spreadsheet
+  data={data}
+  columns={columns}
+  onSelectionChange={(selection) => {
+    console.log("Active cell:", selection.activeCell);
+    console.log("Selection range:", selection.selectionRange);
+    console.log("Selected rows:", selection.selectedRows);
+  }}
+/>
+```
+
+### Ref API
+
+Use a ref for imperative control:
+
+```tsx
+import { useRef } from "react";
+import { Spreadsheet, type SpreadsheetRef } from "@shadsheet/ui";
+
+function MyComponent() {
+  const ref = useRef<SpreadsheetRef>(null);
+
+  const handleExport = () => {
+    ref.current?.exportToCSV();
+  };
+
+  const handleScroll = () => {
+    ref.current?.scrollToCell(50, "name");
+  };
+
+  return (
+    <>
+      <button onClick={handleExport}>Export CSV</button>
+      <Spreadsheet ref={ref} data={data} columns={columns} />
+    </>
+  );
+}
+```
+
+#### Ref Methods
+
+| Method | Description |
+|--------|-------------|
+| `focus()` | Focus the grid for keyboard input |
+| `scrollToCell(row, col)` | Scroll to a specific cell |
+| `getSelectedData()` | Get selected range as 2D array |
+| `getData()` | Get all row data |
+| `setData(data)` | Replace all data |
+| `exportToCSV()` | Download as CSV |
+| `exportToXLSX()` | Download as XLSX |
+| `undo()` | Undo last change |
+| `redo()` | Redo last undone change |
+
+---
+
+## Concepts
+
+### Provider Pattern
+
+ShadSheet uses React contexts to share state across components. The `SpreadsheetProvider` wraps your spreadsheet UI and provides:
+
+- **SpreadsheetContext** - Zustand store for UI state
+- **TableContext** - TanStack Table instance
+- **HyperFormulaContext** - Formula engine instance
+
+```tsx
+import {
+  SpreadsheetProvider,
+  SpreadsheetGrid,
+  Toolbar,
+  FormulaBar,
+} from "@shadsheet/ui";
+
+function CustomSpreadsheet({ data, columns }) {
+  return (
+    <SpreadsheetProvider data={data} columns={columns}>
+      <div className="flex flex-col h-full">
+        <Toolbar columns={columns} />
+        <FormulaBar />
+        <SpreadsheetGrid className="flex-1" />
+      </div>
+    </SpreadsheetProvider>
+  );
+}
+```
+
+> Warning: Hooks like `useSpreadsheetStore` and `useHyperFormula` must be used within a `SpreadsheetProvider`.
+
+### State Management
+
+ShadSheet uses Zustand with Immer for state management. The store holds:
+
+- **Selection state** - Active cell, selection range
+- **Edit state** - Currently editing cell, value, validation errors
+- **Table state** - Sorting, filters, column order, pinning
+- **UI state** - Cell formats, merged cells, context menu
+
+```tsx
+import { useSpreadsheetStore } from "@shadsheet/ui";
+
+function SelectionIndicator() {
+  const activeCell = useSpreadsheetStore((s) => s.activeCell);
+  const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
+
+  if (!activeCell) return <span>No selection</span>;
+
+  return (
+    <span>
+      {selectionRange
+        ? `Range: ${selectionRange.start.rowIndex}:${selectionRange.end.rowIndex}`
+        : `Cell: ${activeCell.rowIndex}, ${activeCell.columnId}`}
+    </span>
+  );
+}
+```
+
+### Data Flow
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────┐
+│   Props     │────▶│ SpreadsheetProvider │────▶│ TanStack Table │
+│ data, cols  │     │   + HyperFormula  │     │   + Zustand   │
+└─────────────┘     └──────────────────┘     └─────────────┘
+                                                   │
+                    ┌──────────────────────────────┘
+                    ▼
+              ┌─────────────┐
+              │ Components  │
+              │ Grid, Toolbar│
+              └─────────────┘
+                    │
+                    ▼
+              ┌─────────────┐
+              │   Callbacks │
+              │ onCellChange│
+              └─────────────┘
+```
+
+#### HyperFormula Integration
+
+Cell values are stored in HyperFormula, not React state. This enables:
+
+- Excel-compatible formulas
+- Undo/redo history
+- Dependency tracking
+- Cross-sheet references (future)
+
+```tsx
+import { useHyperFormula } from "@shadsheet/ui";
+
+function FormulaViewer() {
+  const hf = useHyperFormula();
+
+  if (!hf) return null;
+
+  // Access raw formula
+  const formula = hf.getCellFormula({ sheet: 0, row: 0, col: 0 });
+
+  // Access computed value
+  const value = hf.getCellValue({ sheet: 0, row: 0, col: 0 });
+
+  return <div>{formula ?? String(value)}</div>;
+}
+```
+
+### Column Configuration
+
+Columns define the schema and behavior:
+
+```tsx
+interface ColumnConfig<TData> {
+  id: string;                    // Column identifier (maps to data key)
+  header: string;                // Display name
+  width?: number;                // Initial width in pixels
+  minWidth?: number;             // Minimum resizable width
+  maxWidth?: number;             // Maximum resizable width
+  pinned?: "left" | "right";     // Pin to edge
+  sortable?: boolean;            // Enable sorting
+  filterable?: boolean;          // Enable filtering
+  type?: "text" | "number" | "date" | "select" | "checkbox";
+  editable?: boolean | ((row: TData) => boolean);  // Edit permission
+  validation?: ZodSchema;        // Zod validation schema
+  options?: SelectOption[];      // Options for select type
+}
+```
+
+### Selection Model
+
+ShadSheet supports multiple selection modes:
+
+#### Cell Selection
+
+```tsx
+const activeCell = useSpreadsheetStore((s) => s.activeCell);
+// { rowIndex: 0, columnId: "name" }
+```
+
+#### Range Selection
+
+```tsx
+const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
+// { start: { rowIndex: 0, columnId: "a" }, end: { rowIndex: 5, columnId: "c" } }
+```
+
+#### Row Selection
+
+```tsx
+<Spreadsheet
+  data={data}
+  columns={columns}
+  rowSelection="multi"  // "single" | "multi" | "none"
+  onSelectionChange={(selection) => {
+    console.log(selection.selectedRowIds);  // ["row-1", "row-3"]
+    console.log(selection.selectedRows);    // [{...}, {...}]
+  }}
+/>
+```
+
+### Virtualization
+
+ShadSheet uses TanStack Virtual for both rows and columns:
+
+- **Rows** - Virtualized scrolling for 100K+ rows
+- **Center columns** - Virtualized horizontal scrolling
+- **Pinned columns** - Not virtualized (always visible)
+
+> Note: Virtualization is automatic. No configuration needed.
+
+---
+
+## Components
+
+### Spreadsheet
+
+The `Spreadsheet` component is the primary entry point. It includes all features: toolbar, formula bar, grid, status bar, and context menu.
+
+#### Props
+
+```tsx
+import { Spreadsheet, type SpreadsheetProps } from "@shadsheet/ui";
+```
+
+##### Data Props
+
+| Prop | Type | Required | Description |
+|------|------|----------|-------------|
+| `data` | `TData[]` | ✓ | Array of row objects |
+| `columns` | `ColumnConfig<TData>[]` | ✓ | Column definitions |
+| `getRowId` | `(row, index) => string` | | Custom row ID getter |
+| `getSubRows` | `(row) => TData[]` | | Tree data support |
+
+##### Feature Flags
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `sortable` | `boolean` | `false` | Enable column sorting |
+| `filterable` | `boolean` | `false` | Enable column filtering |
+| `editable` | `boolean` | `true` | Enable cell editing |
+| `resizableColumns` | `boolean` | `true` | Enable column resize |
+| `formulasEnabled` | `boolean` | `true` | Enable HyperFormula |
+| `showToolbar` | `boolean` | `true` | Show toolbar |
+| `showFormulaBar` | `boolean` | `true` | Show formula bar |
+| `globalSearchable` | `boolean` | `false` | Show global search |
+
+##### Layout Props
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `height` | `string \| number` | `"100%"` | Container height |
+| `className` | `string` | | Additional CSS classes |
+| `theme` | `"light" \| "dark"` | | Theme override |
+| `defaultColumnWidth` | `number` | `120` | Default column width |
+| `pinnedColumns` | `{ left?: string[], right?: string[] }` | | Pinned column IDs |
+| `grouping` | `string[]` | | Columns to group by |
+
+##### Row Selection
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `rowSelection` | `"single" \| "multi" \| "none"` | `"multi"` | Row selection mode |
+
+##### Callbacks
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `onCellChange` | `(change) => void \| boolean` | Cell edit callback. Return `false` to veto. |
+| `onSelectionChange` | `(selection) => void` | Selection changed |
+| `onBeforeCellEdit` | `(cell, row) => boolean` | Block edit entry. Return `false` to block. |
+| `onSort` | `(sorting) => void` | Sort changed |
+| `onFilter` | `(filters) => void` | Filter changed |
+| `onExport` | `(format) => void` | Export triggered |
+
+##### Other
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `exportFileName` | `string` | Default filename for exports |
+| `mergeVirtualized` | `boolean` | Optimize merge rendering for large grids |
+
+#### Basic Usage
+
+```tsx
+import { Spreadsheet, type ColumnConfig } from "@shadsheet/ui";
+
+type Row = {
+  name: string;
+  amount: number;
+  active: boolean;
+};
+
+const columns: ColumnConfig<Row>[] = [
+  { id: "name", header: "Name", editable: true, width: 200 },
+  { id: "amount", header: "Amount", type: "number", editable: true },
+  { id: "active", header: "Active", type: "checkbox", editable: true },
+];
+
+const data: Row[] = [
+  { name: "Alice", amount: 100, active: true },
+  { name: "Bob", amount: 200, active: false },
+];
+
+export function MySpreadsheet() {
+  return (
+    <div style={{ height: 500 }}>
+      <Spreadsheet
+        data={data}
+        columns={columns}
+        sortable
+        filterable
+        onCellChange={({ rowIndex, columnId, newValue }) => {
+          console.log(`Changed ${rowIndex}.${columnId} to ${newValue}`);
+        }}
+      />
+    </div>
+  );
+}
+```
+
+#### With Ref
+
+```tsx
+import { useRef } from "react";
+import { Spreadsheet, type SpreadsheetRef } from "@shadsheet/ui";
+
+function MyComponent() {
+  const ref = useRef<SpreadsheetRef>(null);
+
+  return (
+    <>
+      <button onClick={() => ref.current?.exportToCSV()}>
+        Export CSV
+      </button>
+      <Spreadsheet ref={ref} data={data} columns={columns} />
+    </>
+  );
+}
+```
+
+#### Tree Data
+
+```tsx
+const data = [
+  {
+    name: "Parent",
+    amount: 0,
+    children: [
+      { name: "Child 1", amount: 100 },
+      { name: "Child 2", amount: 200 },
+    ],
+  },
+];
+
+<Spreadsheet
+  data={data}
+  columns={columns}
+  getSubRows={(row) => row.children}
+/>
+```
+
+#### Pinned Columns
+
+```tsx
+<Spreadsheet
+  data={data}
+  columns={columns}
+  pinnedColumns={{
+    left: ["id", "name"],
+    right: ["actions"]
+  }}
+/>
+```
+
+### SpreadsheetGrid
+
+Virtualized grid renderer that displays the spreadsheet data. Should be used within a `SpreadsheetProvider`.
+
+### Toolbar
+
+Formatting toolbar component for the spreadsheet. Provides common actions like cut, copy, paste, and formatting options.
+
+### FormulaBar
+
+Input bar for formulas and cell values. Displays the active cell's content and allows formula editing.
+
+### StatusBar
+
+Shows row count, column count, and aggregate information. Also displays the current selection range.
+
+### ColumnHeaders
+
+Header row component that shows column names and handles column-level operations like sorting, filtering, and resizing.
+
+### GlobalSearchFilter
+
+Component for searching and filtering across all columns simultaneously.
+
+### ColumnFilterPanel
+
+Provides column-specific filtering options, allowing for advanced filtering on individual columns.
+
+### ContextMenu
+
+Right-click context menu with common spreadsheet operations like cut, copy, paste, insert/delete rows/columns, etc.
+
+---
+
+## Hooks
+
+### useSpreadsheetStore
+
+Access the internal Zustand store to read and manipulate spreadsheet state.
+
+#### Usage
+
+```tsx
+import { useSpreadsheetStore } from "@shadsheet/ui";
+
+function SelectionInfo() {
+  const activeCell = useSpreadsheetStore((s) => s.activeCell);
+  const selectionRange = useSpreadsheetStore((s) => s.selectionRange);
+  const setActiveCell = useSpreadsheetStore((s) => s.setActiveCell);
+
+  return (
+    <div>
+      Active: {activeCell ? `${activeCell.rowIndex}:${activeCell.columnId}` : "None"}
+      <button onClick={() => setActiveCell({ rowIndex: 0, columnId: "A" })}>
+        Reset
+      </button>
+    </div>
+  );
+}
+```
+
+> Warning: Must be used within a `SpreadsheetProvider`.
+
+#### State Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `activeCell` | `CellAddress \| null` | Currently focused cell |
+| `selectionRange` | `SelectionRange \| null` | Selected range |
+| `editingCell` | `CellAddress \| null` | Cell being edited |
+| `editValue` | `CellValue` | Current edit value |
+| `sorting` | `SortingState` | TanStack sort state |
+| `columnFilters` | `ColumnFiltersState` | TanStack filter state |
+| `globalFilter` | `string` | Global search value |
+| `columnPinning` | `ColumnPinningState` | Pinned columns |
+| `columnVisibility` | `VisibilityState` | Hidden columns |
+| `rowSelection` | `RowSelectionState` | Selected row IDs |
+| `cellFormats` | `Record<string, CellFormat>` | Cell formatting |
+| `mergedCells` | `MergedCell[]` | Merged regions |
+
+#### Actions
+
+| Action | Signature | Description |
+|--------|-----------|-------------|
+| `setActiveCell` | `(cell) => void` | Set focused cell |
+| `setSelection` | `(range) => void` | Set selection range |
+| `startEditing` | `(cell, overwrite?) => void` | Begin editing |
+| `cancelEdit` | `() => void` | Cancel editing |
+| `setSorting` | `(sorting) => void` | Update sort state |
+| `setGlobalFilter` | `(filter) => void` | Update search |
+| `pinColumn` | `(id, position) => void` | Pin/unpin column |
+| `toggleBold` | `(keys) => void` | Toggle bold |
+| `mergeCells` | `(range, ids) => void` | Merge selection |
+
+### useCellSelection
+
+Manage cell and range selection logic. Provides methods to select ranges, extend selections, and track selection changes.
+
+### useClipboard
+
+Handle copy, cut, and paste operations in the spreadsheet. Integrates with the system clipboard and manages clipboard data format.
+
+### useKeyboardNavigation
+
+Handle keyboard-based navigation in the spreadsheet including arrow keys, Tab, Enter, and other common navigation patterns.
+
+### useHyperFormula
+
+Access the HyperFormula instance directly to perform advanced formula operations, access raw cell formulas, and interact with the formula engine.
+
+### useMergeCells
+
+Manage cell merging operations including creating, removing, and querying merged cell ranges.
+
+### useColumnResize
+
+Handle column resizing operations with proper event handling and UI feedback.
+
+### useGridOperations
+
+Provide access to core grid operations like inserting/deleting rows and columns, clearing cells, and other bulk operations.
+
+### useAutoFill
+
+Handle the auto-fill functionality for copying formulas and values to adjacent cells.
+
+---
+
+## Utilities
+
+### Export Utilities
+
+Standalone functions for exporting spreadsheet data.
+
+#### exportToCSV
+
+Export to CSV file download:
+
+```tsx
+import { exportToCSV } from "@shadsheet/ui";
+import type { HyperFormula } from "hyperformula";
+
+// Within a component that has hf instance
+function handleExport(hf: HyperFormula, columns, columnVisibility) {
+  exportToCSV(
+    hf,                    // HyperFormula instance
+    0,                     // Sheet ID
+    columns,               // Column configs
+    columnVisibility,      // Visibility state
+    "my-data.csv",         // Filename
+    { mergedCells, mergedCellLookup },  // Optional merge state
+    visibleColumnIds       // Optional column order
+  );
+}
+```
+
+##### Parameters
+
+| Param | Type | Description |
+|-------|------|-------------|
+| `hf` | `HyperFormula` | Formula engine instance |
+| `sheetId` | `number` | Sheet index (usually 0) |
+| `columns` | `SpreadsheetColumnConfig[]` | Column definitions |
+| `columnVisibility` | `VisibilityState` | Hidden column map |
+| `filename` | `string` | Output filename |
+| `mergeState` | `MergeExportState` | Merged cell state |
+| `orderedVisibleColumnIds` | `string[]` | Custom column order |
+
+#### exportToXLSX
+
+Export to Excel file:
+
+```tsx
+import { exportToXLSX } from "@shadsheet/ui";
+
+async function handleExport(hf, columns, columnVisibility) {
+  await exportToXLSX(
+    hf,
+    0,
+    columns,
+    columnVisibility,
+    "my-data.xlsx"
+  );
+}
+```
+
+> Note: XLSX export includes merged cells and number formatting.
+
+#### CSV Injection Protection
+
+The CSV export automatically sanitizes values starting with `=`, `+`, `-`, `@` to prevent formula injection attacks.
+
+### Filter Utilities
+
+Functions for applying and manipulating filters on spreadsheet data.
+
+### Validation Utilities
+
+Zod-based validation utilities for cell values and data types.
+
+### Cell Address Utilities
+
+Functions for parsing and formatting cell addresses in A1 notation.
+
+---
+
+## Guides
+
+### Headless Usage
+
+ShadSheet exports a layered API that lets you build completely custom spreadsheet UIs while reusing the core logic.
+
+#### When to Go Headless
+
+- Need complete control over layout and styling
+- Building a domain-specific spreadsheet interface
+- Integrating with existing UI components
+- Performance optimization (render only what you need)
+
+#### Basic Custom Layout
+
+```tsx
+import {
+  SpreadsheetProvider,
+  SpreadsheetGrid,
+  Toolbar,
+  FormulaBar,
+  StatusBar,
+  useSpreadsheetStore,
+} from "@shadsheet/ui";
+import "@shadsheet/ui/style.css";
+
+function CustomSpreadsheet({ data, columns }) {
+  const activeCell = useSpreadsheetStore((s) => s.activeCell);
+
+  return (
+    <SpreadsheetProvider data={data} columns={columns}>
+      <div className="flex flex-col h-full border rounded-lg">
+        {/* Custom header */}
+        <div className="bg-gray-100 p-2 border-b">
+          <h2>My Spreadsheet</h2>
+          {activeCell && <span>Selected: {activeCell.columnId}{activeCell.rowIndex + 1}</span>}
+        </div>
+
+        {/* Toolbar */}
+        <Toolbar columns={columns} className="border-b" />
+
+        {/* Formula bar */}
+        <FormulaBar className="border-b" />
+
+        {/* Main grid */}
+        <SpreadsheetGrid className="flex-1" />
+
+        {/* Custom footer */}
+        <div className="bg-gray-50 p-2 border-t text-sm text-gray-600">
+          Custom footer - <StatusBar totalRows={data.length} totalColumns={columns.length} selectedRowCount={0} visibleColumnIds={columns.map(c => c.id)} />
+        </div>
+      </div>
+    </SpreadsheetProvider>
+  );
+}
+```
+
+#### Using Hooks Directly
+
+Build your own components using hooks:
+
+```tsx
+import { useSpreadsheetStore, useHyperFormula } from "@shadsheet/ui";
+
+function CustomFormulaBar() {
+  const activeCell = useSpreadsheetStore((s) => s.activeCell);
+  const hf = useHyperFormula();
+
+  if (!activeCell || !hf) return null;
+
+  const rawValue = hf.getCellFormula({ sheet: 0, row: activeCell.rowIndex, col: 0 });
+
+  return (
+    <input
+      value={rawValue ?? ""}
+      onChange={(e) => {
+        // Update HyperFormula...
+      }}
+    />
+  );
+}
+```
+
+#### Standalone Store
+
+Create a store outside React for testing or server-side logic:
+
+```tsx
+import { createSpreadsheetStore } from "@shadsheet/ui";
+
+const store = createSpreadsheetStore(columns);
+
+// Subscribe to changes
+store.subscribe((state) => {
+  console.log("Active cell:", state.activeCell);
+});
+
+// Dispatch actions
+store.getState().setActiveCell({ rowIndex: 0, columnId: "A" });
+```
+
+### Custom Layouts
+
+Guide on creating custom spreadsheet layouts with different components positioned as needed.
+
+### Theming
+
+Learn how to customize the appearance of ShadSheet components with Tailwind CSS and custom CSS variables.
+
+### TypeScript
+
+Detailed guide on using ShadSheet with TypeScript, including type definitions and generic components.

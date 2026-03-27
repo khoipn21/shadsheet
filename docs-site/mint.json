@@ -106,5 +106,8 @@
   ],
   "footerSocials": {
     "github": "https://github.com/khoipn21/shadsheet"
+  },
+  "ai": {
+    "contextualMenu": true
   }
 }
