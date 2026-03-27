@@ -13,14 +13,14 @@
   },
   "topbarLinks": [
     {
-      "name": "GitHub",
-      "url": "https://github.com/khoipn21/shadsheet"
+      "name": "Storybook",
+      "url": "https://shadsheet.vercel.app"
+    },
+    {
+      "name": "npm",
+      "url": "https://www.npmjs.com/package/@khoipn2112/shadsheet"
     }
   ],
-  "topbarCtaButton": {
-    "name": "npm",
-    "url": "https://www.npmjs.com/package/@khoipn2112/shadsheet"
-  },
   "tabs": [
     {
       "name": "Components",
@@ -49,7 +49,12 @@
   "navigation": [
     {
       "group": "Getting Started",
-      "pages": ["introduction", "installation", "quick-start", "concepts"]
+      "pages": [
+        "introduction",
+        "installation",
+        "quick-start",
+        "concepts"
+      ]
     },
     {
       "group": "Components",
@@ -92,7 +97,6 @@
     {
       "group": "Guides",
       "pages": [
-        "guides/live-demo",
         "guides/headless-usage",
         "guides/custom-layouts",
         "guides/theming",
